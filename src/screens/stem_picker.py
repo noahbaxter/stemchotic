@@ -12,7 +12,7 @@ closes.
 """
 
 from chotic_ui import Colors, Menu, MenuItem, MenuDivider
-from ..core.engines import STEM_OPTIONS, plan_text
+from ..core.engines import STEM_OPTIONS, plan_text, model_label
 from .model_picker import show_model_picker
 
 
@@ -56,20 +56,17 @@ def show_stem_picker(state: dict) -> dict | None:
             subtitle="Enter or Space to pick stems  ·  then choose Start splitting",
             space_hint="Pick",
             esc_label="Quit",
+            column_header=f"{Colors.MUTED}model{Colors.RESET}",
         )
 
         for opt, connector in _layout():
             on = opt.name in selected
             mark = f"{Colors.GREEN}●{Colors.RESET}" if on else f"{Colors.MUTED}○{Colors.RESET}"
             name_col = Colors.GREEN if on else Colors.MUTED
-            if connector:
-                prefix = f"   {Colors.DIM}{connector}{Colors.RESET} "
-                tag = f"  {Colors.DIM}drumsep{Colors.RESET}"
-            else:
-                prefix = ""
-                tag = ""
-            menu.add_item(MenuItem(label=f"{prefix}{mark} {name_col}{opt.name}{Colors.RESET}{tag}",
-                                   value=("stem", opt.name)))
+            prefix = f"   {Colors.DIM}{connector}{Colors.RESET} " if connector else ""
+            menu.add_item(MenuItem(label=f"{prefix}{mark} {name_col}{opt.name}{Colors.RESET}",
+                                   value=("stem", opt.name),
+                                   description=model_label(opt.name)))
 
         # Settings (inline, no nested screen), then the proceed action LAST.
         menu.add_item(MenuDivider(pinned=True))
