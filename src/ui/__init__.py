@@ -39,7 +39,7 @@ from .widgets import (
     MenuResult,
     ConfirmDialog,
 )
-from .screens import HomeScreen, show_home
+from .screens import show_stem_picker
 
 __all__ = [
     "clear_screen",
@@ -67,6 +67,5 @@ __all__ = [
     "MenuAction",
     "MenuResult",
     "ConfirmDialog",
-    "HomeScreen",
-    "show_home",
+    "show_stem_picker",
 ]

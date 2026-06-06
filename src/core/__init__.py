@@ -1,6 +1,21 @@
-"""Core logic: templates and the separation wrapper."""
+"""Core logic: engines, selection resolution, and the separation wrapper."""
 
-from .templates import Template, Stage, TEMPLATES, get_template
-from .separator import separate
+from .engines import (
+    STEM_OPTIONS,
+    StemOption,
+    CLI_PRESETS,
+    Pass,
+    resolve,
+    plan_text,
+)
+from .separator import run
 
-__all__ = ["Template", "Stage", "TEMPLATES", "get_template", "separate"]
+__all__ = [
+    "STEM_OPTIONS",
+    "StemOption",
+    "CLI_PRESETS",
+    "Pass",
+    "resolve",
+    "plan_text",
+    "run",
+]

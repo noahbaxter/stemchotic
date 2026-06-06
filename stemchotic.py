@@ -2,89 +2,94 @@
 """
 Stemchotic entry point.
 
-Two ways to run:
-  stemchotic.py                      -> TUI: pick a template from the menu
-  stemchotic.py <template> <file>    -> direct: run a template on a file
-  stemchotic.py --list               -> list available templates
+  stemchotic.py                   -> TUI: highlight stems, separate
+  stemchotic.py <preset> <file>   -> direct: run a CLI preset on a file
+  stemchotic.py --list            -> list presets
 """
 
 import argparse
 import sys
 
 from src import __version__
-from src.core.templates import TEMPLATES, get_template
-from src.core.separator import separate
+from src.core.engines import CLI_PRESETS, plan_text
+from src.core.separator import run
 
 
-def list_templates():
-    print(f"\nstemchotic v{__version__} - templates:\n")
-    for t in TEMPLATES:
-        tag = "  (experimental)" if t.experimental else ""
-        print(f"  {t.key:<14} {t.name}{tag}")
-        print(f"  {'':<14} {t.description}\n")
+def list_presets():
+    print(f"\nstemchotic v{__version__} - CLI presets:\n")
+    for key, stems in CLI_PRESETS.items():
+        print(f"  {key:<14} {', '.join(stems)}")
+    print("\n  (or run with no args for the interactive picker)\n")
 
 
-def run_template(template, input_file):
-    print(f"\nRunning '{template.name}' on {input_file} ...")
+def do_run(selected, input_file, output_format="WAV", model_override=None):
+    print(f"\n  Plan: {plan_text(selected)}")
+    print(f"  Output -> next to {input_file}\n")
     try:
-        outputs = separate(template, input_file, progress=lambda m: print(f"  {m}"))
+        outputs = run(
+            selected, input_file,
+            output_format=output_format,
+            model_override=model_override,
+            progress=lambda m: print(f"  {m}"),
+        )
     except Exception as e:
         print(f"\n  Error: {e}")
         return 1
-    print("\n  Done. Output stems:")
+    print("\n  Stems written:")
     for path in outputs:
         print(f"    {path}")
     return 0
 
 
 def run_tui():
-    """Launch the interactive menu loop."""
     from src.ui import clear_screen, input_with_esc, CancelInput
-    from src.ui.screens import show_home
+    from src.ui.screens import show_stem_picker
 
     while True:
-        template = show_home()
-        if template is None:
+        choice = show_stem_picker()
+        if choice is None:
             clear_screen()
             print("Bye.")
             return 0
 
         try:
-            input_file = input_with_esc(f"\n  Audio file for '{template.name}': ")
+            input_file = input_with_esc("\n  Audio file: ")
         except CancelInput:
             continue
-
         if not input_file.strip():
             continue
 
-        run_template(template, input_file.strip())
+        do_run(
+            choice["selected"], input_file.strip(),
+            output_format=choice["output_format"],
+            model_override=choice["model_override"],
+        )
         try:
-            input_with_esc("\n  Press Enter to return to the menu... ")
+            input_with_esc("\n  Press Enter to return to the picker... ")
         except CancelInput:
             pass
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="stemchotic", description="Easy stem separation templates.")
-    parser.add_argument("template", nargs="?", help="Template key (see --list)")
+    parser = argparse.ArgumentParser(prog="stemchotic", description="Easy stem separation.")
+    parser.add_argument("preset", nargs="?", help="Preset key (see --list)")
     parser.add_argument("input", nargs="?", help="Input audio file")
-    parser.add_argument("-l", "--list", action="store_true", help="List templates and exit")
+    parser.add_argument("-l", "--list", action="store_true", help="List presets and exit")
     parser.add_argument("-v", "--version", action="version", version=f"stemchotic {__version__}")
     args = parser.parse_args(argv)
 
     if args.list:
-        list_templates()
+        list_presets()
         return 0
 
-    if args.template and args.input:
-        template = get_template(args.template)
-        if template is None:
-            print(f"Unknown template '{args.template}'. Use --list to see options.")
+    if args.preset and args.input:
+        if args.preset not in CLI_PRESETS:
+            print(f"Unknown preset '{args.preset}'. Use --list to see options.")
             return 1
-        return run_template(template, args.input)
+        return do_run(CLI_PRESETS[args.preset], args.input)
 
-    if args.template and not args.input:
-        print("Missing input file. Usage: stemchotic <template> <file>  (or run with no args for the menu)")
+    if args.preset and not args.input:
+        print("Missing input file. Usage: stemchotic <preset> <file>  (or no args for the picker)")
         return 1
 
     return run_tui()

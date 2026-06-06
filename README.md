@@ -12,9 +12,11 @@ Demucs, and the BS-RoFormer family.
 
 ## Status
 
-Early skeleton. The menu, templates, and single-model templates are wired. The
-drum-kit cascade (drums -> kick/snare/toms/cymbals via drumsep) is stubbed and
-not yet verified.
+Working for single-model stems. The picker, live plan text, single-stem and
+multi-stem (filtered) output, vocals/instrumental routing to RoFormer, output
+next to the input, and silenced logging are all verified on real files. The
+drum-kit cascade (drums -> kick/snare/toms/cymbals via drumsep) is wired but the
+drumsep checkpoint load is not yet verified.
 
 ## Install
 
@@ -31,26 +33,34 @@ NVIDIA GPU, change the extra to `[gpu]` in `requirements.txt`.
 ## Use
 
 ```sh
-# Interactive menu
+# Interactive picker: highlight the stems you want, hit Separate
 python stemchotic.py
 
-# Direct
-python stemchotic.py vocals song.wav
+# Direct, via a CLI preset
+python stemchotic.py drums song.wav
 
-# List templates
+# List presets
 python stemchotic.py --list
 ```
 
-## Templates
+Output files are written **next to the input file**.
 
-| Key | Template | Best for |
+In the picker, each stem you highlight implies its model, and the line under the
+box shows the exact plan (which model(s), how many passes, single-stem vs
+filtered). Pick exactly one stem and it optimises for that one file; pick vocals
+or instrumental and it routes to the dedicated BS-RoFormer model. "Advanced" lets
+you set the output format or force a specific model directly.
+
+## Presets (CLI shortcuts)
+
+| Key | Stems | Notes |
 |---|---|---|
-| `vocals` | Vocals + Instrumental | karaoke, acapellas |
-| `instrumental` | Clean Instrumental | backing tracks |
-| `band` | Full Band (6 stems) | remixing |
-| `drums` | Drums (isolated) | drumless tracks |
-| `kit` | Drum Kit Pieces (experimental) | charting: kick/snare/toms/cymbals |
-| `bass` | Bass | basslines |
+| `vocals` | Vocals, Instrumental | BS-RoFormer |
+| `instrumental` | Instrumental | BS-RoFormer |
+| `band` | Drums, Bass, Vocals, Guitar, Piano, Other | HTDemucs 6-stem (vocals routed to RoFormer) |
+| `drums` | Drums | single file |
+| `kit` | Kick, Snare, Toms, Cymbals | experimental drumsep cascade |
+| `bass` | Bass | single file |
 
 ## Credits
 

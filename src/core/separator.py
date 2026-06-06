@@ -1,21 +1,25 @@
 """
 Thin wrapper over python-audio-separator.
 
-Runs a Template (one or more model stages) against an input file. The heavy
-dependency (audio_separator -> torch/onnxruntime) is imported lazily so the TUI
-launches instantly without it installed.
+Turns a selection of stems into output files written next to the input. The
+heavy dependency (audio_separator -> torch/onnxruntime) is imported lazily so the
+TUI launches instantly. audio-separator's own INFO logging is silenced; we emit
+our own step messages through the `progress` callback instead.
 """
 
+import logging
+import os
 from pathlib import Path
 
-from .templates import Template, Stage
+from .engines import Pass, resolve, ENGINE_MODEL
 
 
-DEFAULT_OUTPUT_DIR = "stems"
+def _noop(_msg: str) -> None:
+    pass
 
 
-def _load_separator(model_dir: str, output_dir: str):
-    """Lazily construct an audio_separator Separator. Raises a friendly error if
+def _make_separator(output_dir: str, single_stem=None, output_format="WAV"):
+    """Construct a Separator with logging silenced. Raises a friendly error if
     the dependency is missing."""
     try:
         from audio_separator.separator import Separator
@@ -23,60 +27,88 @@ def _load_separator(model_dir: str, output_dir: str):
         raise RuntimeError(
             "audio-separator is not installed. Run: pip install -r requirements.txt"
         ) from e
-    return Separator(model_file_dir=model_dir, output_dir=output_dir)
+    return Separator(
+        log_level=logging.ERROR,          # kill the INFO wall-of-text
+        output_dir=output_dir,
+        output_single_stem=single_stem,   # one file out when set
+        output_format=output_format,
+    )
 
 
-def run_stage(separator, stage: Stage, input_file: str) -> list[str]:
-    """Run one model pass, return the output stem file paths."""
-    separator.load_model(model_filename=stage.model)
-    return separator.separate(input_file)
+def _separate(separator, model: str, input_file: str) -> list[str]:
+    """Run one model pass; return absolute output paths."""
+    separator.load_model(model_filename=model)
+    names = separator.separate(input_file)
+    return [os.path.join(separator.output_dir, n) for n in names]
 
 
-def separate(
-    template: Template,
+def _filter_to(paths: list[str], keep: list[str]) -> list[str]:
+    """Keep only output files matching the wanted stem names; delete the rest."""
+    keep_l = [k.lower() for k in keep]
+    kept = []
+    for path in paths:
+        stem = Path(path).stem.lower()
+        if any(k in stem for k in keep_l):
+            kept.append(path)
+        else:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+    return kept
+
+
+def run(
+    selected: list[str],
     input_file: str,
-    output_dir: str = DEFAULT_OUTPUT_DIR,
-    model_dir: str = "/tmp/audio-separator-models",
-    progress=None,
+    output_format: str = "WAV",
+    model_override: str | None = None,
+    progress=_noop,
 ) -> list[str]:
     """
-    Run a template against one input file.
+    Separate `input_file` according to the selected stems. Output files are
+    written to the SAME directory as the input. Returns the kept output paths.
 
-    For a single-stage template this is one separation. For a cascade, the first
-    kept stem of each stage feeds the next stage.
-
-    Returns the list of final output stem paths.
-
-    NOTE (skeleton): cascade stem-routing and the drumsep checkpoint are not yet
-    verified end to end. Single-stage templates are the supported path for v1.
+    `model_override` forces a single raw model pass (all its stems) and ignores
+    `selected` - the "pick it yourself" escape hatch.
     """
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-    separator = _load_separator(model_dir, output_dir)
+    input_file = os.path.abspath(input_file)
+    if not os.path.isfile(input_file):
+        raise RuntimeError(f"File not found: {input_file}")
+    out_dir = os.path.dirname(input_file) or os.getcwd()
 
-    current_input = input_file
-    outputs: list[str] = []
+    if model_override:
+        passes = [Pass(engine="custom", model=model_override, stems=[])]
+    else:
+        passes = resolve(selected)
+    if not passes:
+        raise RuntimeError("Nothing selected.")
 
-    for i, stage in enumerate(template.stages):
-        if progress:
-            progress(f"Stage {i + 1}/{len(template.stages)}: {stage.model}")
-        outputs = run_stage(separator, stage, current_input)
+    results: list[str] = []
+    total = len(passes)
+    for i, p in enumerate(passes, 1):
+        if p.cascade_drums:
+            progress(f"[{i}/{total}] Extracting drums (HTDemucs)...")
+            drums = _separate(
+                _make_separator(out_dir, single_stem="Drums"),
+                ENGINE_MODEL["band"], input_file,
+            )
+            drums_path = drums[0]
+            progress(f"[{i}/{total}] Splitting kit (drumsep)...")
+            outs = _separate(
+                _make_separator(out_dir, output_format=output_format),
+                p.model, drums_path,
+            )
+            results += _filter_to(outs, p.stems)
+        else:
+            label = p.single_stem or ", ".join(p.stems) or p.model
+            progress(f"[{i}/{total}] {p.model} -> {label} (this is the slow part)...")
+            sep = _make_separator(out_dir, single_stem=p.single_stem, output_format=output_format)
+            outs = _separate(sep, p.model, input_file)
+            if p.single_stem or not p.stems:
+                results += outs            # already exactly what was asked
+            else:
+                results += _filter_to(outs, p.stems)
 
-        # Cascade: feed the first kept stem of this stage into the next one.
-        if i < len(template.stages) - 1:
-            current_input = _pick_cascade_input(outputs, stage)
-
-    return outputs
-
-
-def _pick_cascade_input(outputs: list[str], stage: Stage) -> str:
-    """Choose which produced stem becomes the next stage's input.
-
-    Matches the first `keep` stem name against the produced filenames. Falls back
-    to the first output if no match (skeleton heuristic - tighten once drumsep is
-    verified)."""
-    if stage.keep:
-        target = stage.keep[0].lower()
-        for path in outputs:
-            if target in Path(path).stem.lower():
-                return path
-    return outputs[0]
+    progress("Done.")
+    return results
