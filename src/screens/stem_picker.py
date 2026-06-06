@@ -53,7 +53,7 @@ def show_stem_picker(state: dict) -> dict | None:
         output_format = state["output_format"]
         menu = Menu(
             title="Pick your stems",
-            subtitle="Space to pick stems  ·  Enter to start splitting",
+            subtitle="Enter or Space to pick stems  ·  then choose Start splitting",
             space_hint="Pick",
             esc_label="Quit",
         )
@@ -79,6 +79,7 @@ def show_stem_picker(state: dict) -> dict | None:
         menu.add_item(MenuItem(
             label=f"{Colors.MUTED}Pick a specific model…{Colors.RESET}",
             hotkey="M", value=ACTION_MODEL, pinned=True))
+        menu.add_item(MenuDivider(pinned=True))
         menu.add_item(MenuItem(
             label=f"{Colors.HOTKEY}Start splitting{Colors.RESET}  {Colors.DIM}→ choose audio file{Colors.RESET}",
             value=ACTION_SEPARATE, pinned=True))
@@ -115,10 +116,6 @@ def show_stem_picker(state: dict) -> dict | None:
             return {"selected": list(selected), "output_format": output_format, "model_override": None}
 
         if isinstance(val, tuple) and val[0] == "stem":
+            # Enter and Space both just toggle; splitting only starts via Start splitting.
             name = val[1]
-            if result.action == "space":
-                selected.discard(name) if name in selected else selected.add(name)
-            else:  # Enter on a stem proceeds; if nothing picked yet, take this one
-                if not selected:
-                    selected.add(name)
-                return {"selected": list(selected), "output_format": output_format, "model_override": None}
+            selected.discard(name) if name in selected else selected.add(name)
