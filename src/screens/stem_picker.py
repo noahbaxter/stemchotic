@@ -17,7 +17,8 @@ from .model_picker import show_model_picker
 
 
 ACTION_SEPARATE = ("action", "separate")
-ACTION_ADVANCED = ("action", "advanced")
+ACTION_FORMAT = ("action", "format")
+ACTION_MODEL = ("action", "model")
 FORMATS = ["WAV", "FLAC", "MP3"]
 
 
@@ -52,8 +53,8 @@ def show_stem_picker(state: dict) -> dict | None:
         output_format = state["output_format"]
         menu = Menu(
             title="Pick your stems",
-            subtitle="Space highlights a stem. Enter on Separate to run.",
-            space_hint="Toggle",
+            subtitle="Space to pick stems  ·  Enter to start splitting",
+            space_hint="Pick",
             esc_label="Quit",
         )
 
@@ -70,11 +71,17 @@ def show_stem_picker(state: dict) -> dict | None:
             menu.add_item(MenuItem(label=f"{prefix}{mark} {name_col}{opt.name}{Colors.RESET}{tag}",
                                    value=("stem", opt.name)))
 
+        # Settings (inline, no nested screen), then the proceed action LAST.
         menu.add_item(MenuDivider(pinned=True))
-        menu.add_item(MenuItem(label=f"{Colors.HOTKEY}▶ Separate selected{Colors.RESET}",
-                               value=ACTION_SEPARATE, pinned=True))
-        menu.add_item(MenuItem(label=f"{Colors.MUTED}⚙ Advanced: output format / pick model{Colors.RESET}",
-                               hotkey="M", value=ACTION_ADVANCED, pinned=True))
+        menu.add_item(MenuItem(
+            label=f"{Colors.MUTED}Output format:{Colors.RESET} {output_format}  {Colors.DIM}(Enter cycles){Colors.RESET}",
+            value=ACTION_FORMAT, pinned=True))
+        menu.add_item(MenuItem(
+            label=f"{Colors.MUTED}Pick a specific model…{Colors.RESET}",
+            hotkey="M", value=ACTION_MODEL, pinned=True))
+        menu.add_item(MenuItem(
+            label=f"{Colors.HOTKEY}Start splitting{Colors.RESET}  {Colors.DIM}→ choose audio file{Colors.RESET}",
+            value=ACTION_SEPARATE, pinned=True))
 
         menu.status_line = f"{plan_text(list(selected))}    |    format: {output_format}"
 
@@ -91,49 +98,27 @@ def show_stem_picker(state: dict) -> dict | None:
 
         val = result.value
 
+        if val == ACTION_FORMAT:
+            i = FORMATS.index(output_format) if output_format in FORMATS else 0
+            state["output_format"] = FORMATS[(i + 1) % len(FORMATS)]
+            continue
+
+        if val == ACTION_MODEL:
+            chosen = show_model_picker()
+            if chosen:
+                return {"selected": list(selected), "output_format": output_format, "model_override": chosen}
+            continue
+
         if val == ACTION_SEPARATE:
             if not selected:
                 continue
             return {"selected": list(selected), "output_format": output_format, "model_override": None}
 
-        if val == ACTION_ADVANCED:
-            adv = _advanced_menu(output_format)
-            if adv is None:
-                continue
-            state["output_format"] = adv["output_format"]
-            if adv.get("model_override"):
-                return {"selected": list(selected), "output_format": adv["output_format"],
-                        "model_override": adv["model_override"]}
-            continue
-
         if isinstance(val, tuple) and val[0] == "stem":
             name = val[1]
-            selected.discard(name) if name in selected else selected.add(name)
-
-
-def _advanced_menu(output_format: str) -> dict | None:
-    """Set output format or browse models to force one. Returns settings, or None
-    if backed out without choosing anything."""
-    menu = Menu(
-        title="Advanced",
-        subtitle="Set the output format, or browse all models and force one.",
-        esc_label="Back",
-    )
-    for fmt in FORMATS:
-        on = fmt == output_format
-        mark = f"{Colors.GREEN}●{Colors.RESET}" if on else f"{Colors.MUTED}○{Colors.RESET}"
-        menu.add_item(MenuItem(label=f"{mark} Output format: {fmt}", value=("format", fmt)))
-    menu.add_item(MenuDivider())
-    menu.add_item(MenuItem(label="Browse all models...", value=("model", None)))
-
-    result = menu.run()
-    if result is None:
-        return None
-
-    kind, payload = result.value
-    if kind == "format":
-        return {"output_format": payload, "model_override": None}
-    if kind == "model":
-        chosen = show_model_picker()
-        return {"output_format": output_format, "model_override": chosen}  # chosen may be None
-    return None
+            if result.action == "space":
+                selected.discard(name) if name in selected else selected.add(name)
+            else:  # Enter on a stem proceeds; if nothing picked yet, take this one
+                if not selected:
+                    selected.add(name)
+                return {"selected": list(selected), "output_format": output_format, "model_override": None}
