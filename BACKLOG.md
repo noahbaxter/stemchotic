@@ -31,6 +31,8 @@
   tier is just arch-based guessing (VR=fast, MDX/Demucs=avg, RoFormer/_ft=slow).
 
 ## Later
+- Ship as a uv-launcher app (mac/win/linux); CI bundles the chotic-ui submodule;
+  separate CPU/CUDA builds on win/linux, MPS on mac.
 - Migrate synchotic onto the chotic-ui submodule too, so the toolkit has one home
   (stemchotic already uses it; synchotic still has its own copy).
 - Optional Gradio/desktop front-end for non-terminal users.
