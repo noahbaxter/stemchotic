@@ -93,12 +93,12 @@ def run(
                 rhythm_model, input_file,
             )
             drums_path = drums[0]
-            progress(f"[{i}/{total}] Splitting kit (drumsep)...")
+            progress(f"[{i}/{total}] Splitting kit ({p.model})...")
             outs = _separate(
                 _make_separator(out_dir, output_format=output_format),
                 p.model, drums_path,
             )
-            results += _filter_to(outs, p.stems)
+            results += _filter_to(outs, p.stems) if p.stems else outs  # whole kit
         else:
             label = p.single_stem or ", ".join(p.stems) or p.model
             progress(f"[{i}/{total}] {p.model} -> {label} (this is the slow part)...")

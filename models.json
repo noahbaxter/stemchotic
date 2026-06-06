@@ -15,8 +15,15 @@
     "htdemucs_ft.yaml": "HTDemucs FT",
     "htdemucs_6s.yaml": "HTDemucs 6s",
     "hdemucs_mmi.yaml": "HDemucs MMI",
-    "drumsep.th": "drumsep"
+    "drumsep.th": "DrumSep 4",
+    "MDX23C-DrumSep-aufr33-jarredou.ckpt": "DrumSep 6"
   },
+
+  "_kit_comment": "Drum-kit splitters: each runs as a cascade (extract drums, then split). Pieces produced are whatever the model outputs.",
+  "kit_models": [
+    {"name": "Drum kit (4-piece)", "model": "drumsep.th"},
+    {"name": "Drum kit (6-piece)", "model": "MDX23C-DrumSep-aufr33-jarredou.ckpt"}
+  ],
 
   "curated": [
     {"label": "Vocals (cleanest)",                 "model": "vocals_mel_band_roformer.ckpt",            "why": "Best vocal isolation (12.6)"},

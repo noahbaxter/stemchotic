@@ -26,9 +26,11 @@ class StemOption:
     name: str            # display + output stem name
     engine: str          # roformer | rhythm | extra | kit
     experimental: bool = False
+    model: str = ""      # kit options carry their own drumsep model
 
 
-# Each stem belongs to one engine, so highlighting it picks the model.
+# Each stem belongs to one engine, so highlighting it picks the model. Kit options
+# (drumsep 4 / 6) come from models.json - each runs a whole-kit cascade.
 STEM_OPTIONS = [
     StemOption("Vocals", "roformer"),
     StemOption("Instrumental", "roformer"),
@@ -37,13 +39,11 @@ STEM_OPTIONS = [
     StemOption("Guitar", "extra"),
     StemOption("Piano", "extra"),
     StemOption("Other", "extra"),
-    StemOption("Kick", "kit", experimental=True),
-    StemOption("Snare", "kit", experimental=True),
-    StemOption("Toms", "kit", experimental=True),
-    StemOption("Cymbals", "kit", experimental=True),
-]
+] + [StemOption(k["name"], "kit", experimental=True, model=k["model"])
+     for k in CONFIG.get("kit_models", [])]
 
 _NAME_TO_ENGINE = {s.name: s.engine for s in STEM_OPTIONS}
+_STEM_MODEL = {s.name: s.model for s in STEM_OPTIONS if s.model}
 
 
 # CLI shortcuts -> default stem selections.
@@ -81,6 +81,8 @@ def weight_tier(arch: str, filename: str) -> str:
 
 def model_for(stem: str, models: dict | None = None) -> str:
     """The model filename a stem uses, honoring per-category overrides."""
+    if stem in _STEM_MODEL:          # kit options carry their own model
+        return _STEM_MODEL[stem]
     cat = _NAME_TO_ENGINE.get(stem, "")
     return (models or {}).get(cat, ENGINE_MODEL.get(cat, ""))
 
@@ -110,20 +112,23 @@ def resolve(selected: list[str], models: dict | None = None, one_pass: str | Non
         return [Pass(engine="custom", model=one_pass, stems=list(selected), single_stem=single)]
 
     by_engine: dict[str, list[str]] = {}
+    kit_passes: list[Pass] = []
     for opt in STEM_OPTIONS:               # stable, deterministic order
-        if opt.name in selected:
+        if opt.name not in selected:
+            continue
+        if opt.engine == "kit":            # each kit option = its own whole-kit cascade
+            kit_passes.append(Pass(engine="kit", model=opt.model, stems=[], cascade_drums=True))
+        else:
             by_engine.setdefault(opt.engine, []).append(opt.name)
 
     passes: list[Pass] = []
     for engine, stems in by_engine.items():
         model = (models or {}).get(engine, ENGINE_MODEL[engine])
         p = Pass(engine=engine, model=model, stems=stems)
-        if engine == "kit":
-            p.cascade_drums = True
-        elif len(stems) == 1:
+        if len(stems) == 1:
             p.single_stem = stems[0]       # write just the one file
         passes.append(p)
-    return passes
+    return passes + kit_passes
 
 
 def plan_text(selected: list[str], models: dict | None = None, one_pass: str | None = None) -> str:
@@ -138,7 +143,7 @@ def plan_text(selected: list[str], models: dict | None = None, one_pass: str | N
     for p in resolve(selected, models):
         label = short_name(p.model)
         if p.cascade_drums:
-            parts.append(f"drums -> drumsep -> {', '.join(p.stems)}")
+            parts.append(f"drums -> {label} (full kit)")
         elif p.single_stem:
             parts.append(f"{label} -> {p.single_stem} only")
         else:

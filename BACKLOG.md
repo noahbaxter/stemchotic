@@ -1,9 +1,17 @@
 # Stemchotic Backlog
 
 ## Next up
-- Verify the drumsep checkpoint actually loads through audio-separator (custom
-  Hybrid Demucs, non-standard kick/snare/tom/cymbal stem names). This is the one
-  unproven piece of the `kit` cascade.
+- Integrate BS-Roformer-SW (open-weight 6-stem roformer: vocals/drums/bass/guitar/
+  piano/other). It's what charters actually prefer for full band, and it's free to
+  run locally, just not in audio-separator's catalogue. Register its ckpt+config as
+  a custom MDXC model in audio-separator, or add bs-roformer-infer as a 2nd backend.
+  Would beat htdemucs_6s and close the full-band gap without mvsep. Sources: HF
+  jarredou/BS-ROFO-SW-Fixed, pip bs-roformer-infer, ZFTurbo Music-Source-Separation-Training.
+- Verify the kit models load: drumsep.th (external, 4-piece) and MDX23C-DrumSep
+  (catalogue, 6-piece kick/snare/toms/hh/ride/crash). The catalogue one should
+  "just work" (auto-downloads); drumsep.th is the unproven one.
+- Optimal per-model settings: we run audio-separator's defaults (segment size,
+  overlap, shifts). Not tuned. Worth a pass once the model set settles.
 - Confirm exact model filenames against `audio-separator --list_models` (the
   roformer checkpoint name drifts between releases).
 - Tighten cascade stem-routing in `core/separator.py` once drumsep is verified.
