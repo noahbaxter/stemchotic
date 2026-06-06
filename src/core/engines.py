@@ -11,20 +11,23 @@ from dataclasses import dataclass, field
 
 # --- Model filenames as known to python-audio-separator ---------------------
 # Verify against `audio-separator --list_models` before relying on them.
-BS_ROFORMER_VOCALS = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"
-HTDEMUCS_6S = "htdemucs_6s.yaml"
-# drumsep: community Hybrid Demucs checkpoint, NOT in the default catalogue.
-# Loading it is unverified - the `kit` stems are experimental.
+# Defaults chosen by SDR from `audio-separator --list_models`.
+BS_ROFORMER = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"  # #1 instrumental (16.5), near-best vocals (12.4)
+HTDEMUCS = "htdemucs.yaml"            # balanced drums (9.4) / bass (11.6)
+HTDEMUCS_6S = "htdemucs_6s.yaml"      # only source of guitar / piano / other
+# drumsep: community Hybrid Demucs checkpoint, NOT in the catalogue. Experimental.
 DRUMSEP = "drumsep.th"
 
 ENGINE_MODEL = {
-    "roformer": BS_ROFORMER_VOCALS,
-    "band": HTDEMUCS_6S,
+    "roformer": BS_ROFORMER,
+    "rhythm": HTDEMUCS,
+    "extra": HTDEMUCS_6S,
     "kit": DRUMSEP,
 }
 ENGINE_LABEL = {
     "roformer": "BS-RoFormer",
-    "band": "HTDemucs 6-stem",
+    "rhythm": "HTDemucs",
+    "extra": "HTDemucs 6s",
     "kit": "drumsep",
 }
 
@@ -32,7 +35,7 @@ ENGINE_LABEL = {
 @dataclass(frozen=True)
 class StemOption:
     name: str            # display + output stem name
-    engine: str          # roformer | band | kit
+    engine: str          # roformer | rhythm | extra | kit
     experimental: bool = False
 
 
@@ -40,11 +43,11 @@ class StemOption:
 STEM_OPTIONS = [
     StemOption("Vocals", "roformer"),
     StemOption("Instrumental", "roformer"),
-    StemOption("Drums", "band"),
-    StemOption("Bass", "band"),
-    StemOption("Guitar", "band"),
-    StemOption("Piano", "band"),
-    StemOption("Other", "band"),
+    StemOption("Drums", "rhythm"),
+    StemOption("Bass", "rhythm"),
+    StemOption("Guitar", "extra"),
+    StemOption("Piano", "extra"),
+    StemOption("Other", "extra"),
     StemOption("Kick", "kit", experimental=True),
     StemOption("Snare", "kit", experimental=True),
     StemOption("Toms", "kit", experimental=True),
@@ -52,6 +55,11 @@ STEM_OPTIONS = [
 ]
 
 _NAME_TO_ENGINE = {s.name: s.engine for s in STEM_OPTIONS}
+
+
+def model_label(name: str) -> str:
+    """Short label of the model a given stem uses by default (for display)."""
+    return ENGINE_LABEL.get(_NAME_TO_ENGINE.get(name, ""), "")
 
 # CLI shortcuts -> default stem selections.
 CLI_PRESETS = {

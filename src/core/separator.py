@@ -91,7 +91,7 @@ def run(
             progress(f"[{i}/{total}] Extracting drums (HTDemucs)...")
             drums = _separate(
                 _make_separator(out_dir, single_stem="Drums"),
-                ENGINE_MODEL["band"], input_file,
+                ENGINE_MODEL["rhythm"], input_file,
             )
             drums_path = drums[0]
             progress(f"[{i}/{total}] Splitting kit (drumsep)...")
