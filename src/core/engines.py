@@ -95,14 +95,14 @@ def weight_tier(arch: str, filename: str) -> str:
     """Rough relative speed: fast / avg / slow. A heuristic from the architecture
     plus a few filename markers (no real benchmark data)."""
     fl = (filename or "").lower()
-    if "_ft" in fl or "ensemble" in fl:   # bag-of-models / ensembles
-        return "slow"
     a = (arch or "").upper()
-    if a == "MDXC":                        # roformer / MDX23C transformers
+    if "ensemble" in fl or "_ft" in fl:   # bag-of-models / ensembles
         return "slow"
-    if a == "VR":
+    if "roformer" in fl:                   # transformers are the heaviest
+        return "slow"
+    if a in ("VR", "MDX"):                  # VR-arch and plain MDX-Net are quick
         return "fast"
-    return "avg"                           # MDX, Demucs, unknown
+    return "avg"                            # MDX23C, Demucs, unknown
 
 
 def model_for(stem: str, models: dict | None = None) -> str:
