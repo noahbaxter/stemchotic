@@ -15,6 +15,9 @@
 - File picker screen instead of typing a path.
 - Decide whether "band" should pull vocals from HTDemucs (1 pass) instead of
   routing to RoFormer (2 passes). Currently routes to RoFormer for quality.
+- Replace the heuristic fast/avg/slow model speed tier with real timing: time a
+  short sample render per model once, cache it, show measured speed. Current
+  tier is just arch-based guessing (VR=fast, MDX/Demucs=avg, RoFormer/_ft=slow).
 
 ## Later
 - Migrate synchotic onto the chotic-ui submodule too, so the toolkit has one home
