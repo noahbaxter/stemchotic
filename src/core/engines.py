@@ -91,6 +91,20 @@ def short_name(filename: str) -> str:
     return base if len(base) <= 18 else base[:17] + "…"
 
 
+def weight_tier(arch: str, filename: str) -> str:
+    """Rough relative speed: fast / avg / slow. A heuristic from the architecture
+    plus a few filename markers (no real benchmark data)."""
+    fl = (filename or "").lower()
+    if "_ft" in fl or "ensemble" in fl:   # bag-of-models / ensembles
+        return "slow"
+    a = (arch or "").upper()
+    if a == "MDXC":                        # roformer / MDX23C transformers
+        return "slow"
+    if a == "VR":
+        return "fast"
+    return "avg"                           # MDX, Demucs, unknown
+
+
 def model_for(stem: str, models: dict | None = None) -> str:
     """The model filename a stem uses, honoring per-category overrides."""
     cat = _NAME_TO_ENGINE.get(stem, "")

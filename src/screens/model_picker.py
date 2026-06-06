@@ -12,7 +12,9 @@ import logging
 import re
 
 from chotic_ui import Colors, FilterList
-from ..core.engines import ENGINE_MODEL, _NAME_TO_ENGINE, short_name
+from ..core.engines import ENGINE_MODEL, _NAME_TO_ENGINE, weight_tier
+
+_TIER_COLOR = {"fast": Colors.GREEN, "avg": Colors.MUTED, "slow": Colors.RED}
 
 _SDR_NUM = re.compile(r"\(([\d.]+)\)")
 
@@ -95,7 +97,9 @@ def _one_pass_candidates(rows, selected):
 def _label(fn, sdr, arch, current):
     mark = f"{Colors.GREEN}● {Colors.RESET}" if current else "  "
     sdr_s = f"{sdr:4.1f}" if sdr else "  - "
-    return f"{mark}{Colors.HOTKEY}{sdr_s}{Colors.RESET}  {Colors.DIM}{arch:5}{Colors.RESET}  {short_name(fn):14}  {Colors.DIM}{fn}{Colors.RESET}"
+    tier = weight_tier(arch, fn)
+    tier_s = f"{_TIER_COLOR.get(tier, Colors.MUTED)}{tier:<6}{Colors.RESET}"
+    return f"{mark}{Colors.HOTKEY}{sdr_s}{Colors.RESET}  {tier_s}  {fn}"
 
 
 def show_model_overlay(selected: list, state: dict) -> None:
@@ -139,7 +143,7 @@ def show_model_overlay(selected: list, state: dict) -> None:
         picker = FilterList(
             items,
             title="Choose models",
-            subtitle="Pick the best model per type. Type to filter. Esc closes.",
+            subtitle="Columns: SDR (quality) · speed (fast/avg/slow) · file. Type to filter. Esc closes.",
             esc_label="Done",
             prompt="Filter",
         )
