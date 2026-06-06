@@ -1,0 +1,28 @@
+{
+  "_comment": "Editable stemchotic defaults. SDR rankings + the model list come live from audio-separator; this file is just the picks/labels. Update as new models appear.",
+
+  "category_defaults": {
+    "roformer": "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
+    "rhythm":   "htdemucs.yaml",
+    "extra":    "htdemucs_6s.yaml",
+    "kit":      "drumsep.th"
+  },
+
+  "names": {
+    "model_bs_roformer_ep_317_sdr_12.9755.ckpt": "BS-RoFormer",
+    "vocals_mel_band_roformer.ckpt": "Mel-Band",
+    "htdemucs.yaml": "HTDemucs",
+    "htdemucs_ft.yaml": "HTDemucs FT",
+    "htdemucs_6s.yaml": "HTDemucs 6s",
+    "hdemucs_mmi.yaml": "HDemucs MMI",
+    "drumsep.th": "drumsep"
+  },
+
+  "curated": [
+    {"label": "Vocals (cleanest)",                 "model": "vocals_mel_band_roformer.ckpt",            "why": "Best vocal isolation (12.6)"},
+    {"label": "Instrumental (cleanest)",            "model": "model_bs_roformer_ep_317_sdr_12.9755.ckpt", "why": "Best instrumental (16.5)"},
+    {"label": "Vocals + Instrumental",              "model": "model_bs_roformer_ep_317_sdr_12.9755.ckpt", "why": "Karaoke split, one pass"},
+    {"label": "4-stem: drums / bass / vocals / other", "model": "htdemucs_ft.yaml",                      "why": "Best 4-stem, slower"},
+    {"label": "Full band: 6 stems",                 "model": "htdemucs_6s.yaml",                          "why": "+ guitar / piano / other"}
+  ]
+}

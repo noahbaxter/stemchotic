@@ -6,30 +6,19 @@ one engine, so your selection implicitly picks the model(s). `resolve()` turns a
 set of selected stem names into the concrete passes to run.
 """
 
-from dataclasses import dataclass, field
+import json
+import os
+from dataclasses import dataclass
 
+# Editable defaults (per-category model, friendly names, curated picks) live in
+# models.json at the repo root. SDR rankings + the model list come live from
+# audio-separator; only the picks/labels are config.
+_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "models.json")
+with open(_CONFIG_PATH, encoding="utf-8") as _f:
+    CONFIG = json.load(_f)
 
-# --- Model filenames as known to python-audio-separator ---------------------
-# Verify against `audio-separator --list_models` before relying on them.
-# Defaults chosen by SDR from `audio-separator --list_models`.
-BS_ROFORMER = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"  # #1 instrumental (16.5), near-best vocals (12.4)
-HTDEMUCS = "htdemucs.yaml"            # balanced drums (9.4) / bass (11.6)
-HTDEMUCS_6S = "htdemucs_6s.yaml"      # only source of guitar / piano / other
-# drumsep: community Hybrid Demucs checkpoint, NOT in the catalogue. Experimental.
-DRUMSEP = "drumsep.th"
-
-ENGINE_MODEL = {
-    "roformer": BS_ROFORMER,
-    "rhythm": HTDEMUCS,
-    "extra": HTDEMUCS_6S,
-    "kit": DRUMSEP,
-}
-ENGINE_LABEL = {
-    "roformer": "BS-RoFormer",
-    "rhythm": "HTDemucs",
-    "extra": "HTDemucs 6s",
-    "kit": "drumsep",
-}
+ENGINE_MODEL = CONFIG["category_defaults"]   # category -> default model filename
+MODEL_SHORT = CONFIG["names"]                # model filename -> friendly short name
 
 
 @dataclass(frozen=True)
@@ -57,10 +46,6 @@ STEM_OPTIONS = [
 _NAME_TO_ENGINE = {s.name: s.engine for s in STEM_OPTIONS}
 
 
-def model_label(name: str) -> str:
-    """Short label of the model a given stem uses by default (for display)."""
-    return ENGINE_LABEL.get(_NAME_TO_ENGINE.get(name, ""), "")
-
 # CLI shortcuts -> default stem selections.
 CLI_PRESETS = {
     "vocals": ["Vocals", "Instrumental"],
@@ -72,19 +57,8 @@ CLI_PRESETS = {
 }
 
 
-# Pretty short names for display; arbitrary models fall back to the filename stem.
-MODEL_SHORT = {
-    BS_ROFORMER: "BS-RoFormer",
-    HTDEMUCS: "HTDemucs",
-    HTDEMUCS_6S: "HTDemucs 6s",
-    DRUMSEP: "drumsep",
-    "htdemucs_ft.yaml": "HTDemucs FT",
-    "hdemucs_mmi.yaml": "HDemucs MMI",
-    "vocals_mel_band_roformer.ckpt": "Mel-Band",
-}
-
-
 def short_name(filename: str) -> str:
+    """Friendly name (from models.json), else the filename stem (truncated)."""
     if filename in MODEL_SHORT:
         return MODEL_SHORT[filename]
     base = filename.rsplit(".", 1)[0]
