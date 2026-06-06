@@ -7,6 +7,9 @@
   a custom MDXC model in audio-separator, or add bs-roformer-infer as a 2nd backend.
   Would beat htdemucs_6s and close the full-band gap without mvsep. Sources: HF
   jarredou/BS-ROFO-SW-Fixed, pip bs-roformer-infer, ZFTurbo Music-Source-Separation-Training.
+  Priority note: charters widely prefer mvsep's BS-Roformer-SW, but several say the
+  gap over demucs is "marginal" (demucs is "very good", the emergency/fallback). So
+  this is a nice upgrade, not urgent - our local demucs default is genuinely fine.
 - Verify the kit models load: drumsep.th (external, 4-piece) and MDX23C-DrumSep
   (catalogue, 6-piece kick/snare/toms/hh/ride/crash). The catalogue one should
   "just work" (auto-downloads); drumsep.th is the unproven one.

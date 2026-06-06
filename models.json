@@ -21,8 +21,8 @@
 
   "_kit_comment": "Drum-kit splitters: each runs as a cascade (extract drums, then split). Pieces produced are whatever the model outputs.",
   "kit_models": [
-    {"name": "Drum kit (4-piece)", "model": "drumsep.th"},
-    {"name": "Drum kit (6-piece)", "model": "MDX23C-DrumSep-aufr33-jarredou.ckpt"}
+    {"name": "4 piece (Kick/Snare/Toms/Cymbals)", "model": "drumsep.th"},
+    {"name": "6 piece (Kick/Snare/Toms/HH/Ride/Crash)", "model": "MDX23C-DrumSep-aufr33-jarredou.ckpt"}
   ],
 
   "curated": [
