@@ -42,10 +42,11 @@ def do_run(selected, input_file, output_format="WAV", models=None, one_pass=None
 
 
 def run_tui():
-    from chotic_ui import clear_screen, input_with_esc, CancelInput, configure_header
+    from chotic_ui import clear_screen, input_with_esc, CancelInput, configure_header, set_theme
     from src.banner import BANNER
     from src.screens import show_stem_picker, new_state
 
+    set_theme("kanagawa")
     configure_header(BANNER, __version__)
     state = new_state()  # persists for the whole session
     while True:

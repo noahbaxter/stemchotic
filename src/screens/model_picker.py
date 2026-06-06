@@ -19,7 +19,7 @@ from chotic_ui import Colors, FilterList
 from ..core.engines import ENGINE_MODEL, _NAME_TO_ENGINE, weight_tier
 
 _SDR_NUM = re.compile(r"\(([\d.]+)\)")
-_TIER_COLOR = {"fast": Colors.GREEN, "avg": Colors.MUTED, "slow": Colors.RED}
+_TIER_COLOR = {"fast": Colors.SUCCESS, "avg": Colors.MUTED, "slow": Colors.ERROR}
 
 # Display stem -> catalog stem (kit pieces have no catalogue model).
 _CATALOG_STEM = {
@@ -90,11 +90,11 @@ def _one_pass(rows, selected):
 
 
 def _label(fn, arch, sdr, current):
-    mark = f"{Colors.GREEN}● {Colors.RESET}" if current else "  "
+    mark = f"{Colors.SUCCESS}● {Colors.RESET}" if current else "  "
     sdr_s = f"{sdr:4.1f}" if sdr else "  - "
     tier = weight_tier(arch, fn)
     tier_s = f"{_TIER_COLOR.get(tier, Colors.MUTED)}{tier:<5}{Colors.RESET}"
-    return f"{mark}{Colors.HOTKEY}{sdr_s}{Colors.RESET}  {tier_s}  {fn}"
+    return f"{mark}{Colors.PRIMARY}{sdr_s}{Colors.RESET}  {tier_s}  {fn}"
 
 
 def show_model_overlay(selected: list, state: dict) -> None:

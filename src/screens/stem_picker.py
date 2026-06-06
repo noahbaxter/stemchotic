@@ -61,30 +61,36 @@ def show_stem_picker(state: dict) -> dict | None:
             column_header=f"{Colors.MUTED}model{Colors.RESET}",
         )
 
-        for opt, connector in _layout():
-            on = opt.name in selected
-            mark = f"{Colors.GREEN}●{Colors.RESET}" if on else f"{Colors.MUTED}○{Colors.RESET}"
-            name_col = Colors.GREEN if on else Colors.MUTED
-            prefix = f"   {Colors.DIM}{connector}{Colors.RESET} " if connector else ""
-            shown = short_name(one_pass) if one_pass else display_model(opt.name, models)
-            menu.add_item(MenuItem(label=f"{prefix}{mark} {name_col}{opt.name}{Colors.RESET}",
-                                   value=("stem", opt.name),
-                                   description=shown))
+        def build(m):
+            # Labels bake in color escapes, so this reruns on theme switch.
+            m.items.clear()
+            for opt, connector in _layout():
+                on = opt.name in selected
+                mark = f"{Colors.SUCCESS}●{Colors.RESET}" if on else f"{Colors.MUTED}○{Colors.RESET}"
+                name_col = Colors.SUCCESS if on else Colors.MUTED
+                prefix = f"   {Colors.DIM}{connector}{Colors.RESET} " if connector else ""
+                shown = short_name(one_pass) if one_pass else display_model(opt.name, models)
+                m.add_item(MenuItem(label=f"{prefix}{mark} {name_col}{opt.name}{Colors.RESET}",
+                                    value=("stem", opt.name),
+                                    description=shown))
 
-        # Settings (inline), then the proceed action LAST.
-        menu.add_item(MenuDivider(pinned=True))
-        menu.add_item(MenuItem(
-            label=f"{Colors.MUTED}Output format:{Colors.RESET} {output_format}  {Colors.DIM}(Enter cycles){Colors.RESET}",
-            value=ACTION_FORMAT, pinned=True))
-        menu.add_item(MenuItem(
-            label=f"{Colors.MUTED}Choose models{Colors.RESET}  {Colors.DIM}(Tab){Colors.RESET}",
-            hotkey="M", value=ACTION_MODEL, pinned=True))
-        menu.add_item(MenuDivider(pinned=True))
-        menu.add_item(MenuItem(
-            label=f"{Colors.HOTKEY}Start splitting{Colors.RESET}  {Colors.DIM}→ choose audio file{Colors.RESET}",
-            value=ACTION_SEPARATE, pinned=True))
+            # Settings (inline), then the proceed action LAST.
+            m.add_item(MenuDivider(pinned=True))
+            m.add_item(MenuItem(
+                label=f"{Colors.MUTED}Output format:{Colors.RESET} {output_format}  {Colors.DIM}(Enter cycles){Colors.RESET}",
+                value=ACTION_FORMAT, pinned=True))
+            m.add_item(MenuItem(
+                label=f"{Colors.MUTED}Choose models{Colors.RESET}  {Colors.DIM}(Tab){Colors.RESET}",
+                hotkey="M", value=ACTION_MODEL, pinned=True))
+            m.add_item(MenuDivider(pinned=True))
+            m.add_item(MenuItem(
+                label=f"{Colors.PRIMARY}Start splitting{Colors.RESET}  {Colors.DIM}→ choose audio file{Colors.RESET}",
+                value=ACTION_SEPARATE, pinned=True))
 
-        menu.status_line = f"{plan_text(list(selected), models, one_pass)}    |    format: {output_format}"
+            m.status_line = f"{plan_text(list(selected), models, one_pass)}    |    format: {output_format}"
+
+        menu.rebuild = build
+        build(menu)
 
         result = menu.run(initial_index=idx)
         if result is None:
