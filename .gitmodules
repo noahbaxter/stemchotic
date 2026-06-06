@@ -1,0 +1,3 @@
+[submodule "libs/chotic-ui"]
+	path = libs/chotic-ui
+	url = https://github.com/noahbaxter/chotic-ui

@@ -17,7 +17,10 @@
   routing to RoFormer (2 passes). Currently routes to RoFormer for quality.
 
 ## Later
-- Extract the synchotic TUI toolkit into its own repo and submodule it into both
-  synchotic and stemchotic, so the framework has one home instead of a copy per
-  project. (Copy-in now, extract later.)
+- Migrate synchotic onto the chotic-ui submodule too, so the toolkit has one home
+  (stemchotic already uses it; synchotic still has its own copy).
 - Optional Gradio/desktop front-end for non-terminal users.
+
+## Done
+- Extracted the TUI toolkit into the chotic-ui repo and submoduled it in
+  (libs/chotic-ui, installed editable via requirements.txt).

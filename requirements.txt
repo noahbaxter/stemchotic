@@ -2,3 +2,6 @@
 # acceleration on Apple Silicon and CPU/ONNX elsewhere. For NVIDIA, swap to
 # audio-separator[gpu].
 audio-separator[cpu]==0.44.2
+
+# Shared TUI toolkit (git submodule under libs/), installed editable.
+-e ./libs/chotic-ui

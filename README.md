@@ -20,11 +20,15 @@ drumsep checkpoint load is not yet verified.
 
 ## Install
 
-Uses a standard venv + `requirements.txt`:
+The TUI toolkit lives in the [chotic-ui](https://github.com/noahbaxter/chotic-ui)
+submodule, so clone with submodules (or init them after):
 
 ```sh
+git clone --recurse-submodules https://github.com/noahbaxter/stemchotic
+# already cloned? -> git submodule update --init
+
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt    # installs audio-separator + the chotic-ui submodule (editable)
 ```
 
 On Apple Silicon this pulls `audio-separator[cpu]` (CoreML acceleration). For an
@@ -69,6 +73,6 @@ persists for the whole session.
 
 - [python-audio-separator](https://github.com/karaokenerds/python-audio-separator) by Andrew Beveridge (MIT)
 - [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) and its model authors
-- TUI toolkit lifted from [synchotic](https://github.com/noahbaxter)
+- TUI via [chotic-ui](https://github.com/noahbaxter/chotic-ui) (originally lifted from synchotic)
 
 MIT licensed.

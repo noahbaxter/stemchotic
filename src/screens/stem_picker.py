@@ -11,9 +11,8 @@ out of the file prompt and returning after a run - it only clears when the app
 closes.
 """
 
-from ..primitives import Colors
-from ..widgets import Menu, MenuItem, MenuDivider
-from ...core.engines import STEM_OPTIONS, plan_text
+from chotic_ui import Colors, Menu, MenuItem, MenuDivider
+from ..core.engines import STEM_OPTIONS, plan_text
 from .model_picker import show_model_picker
 
 

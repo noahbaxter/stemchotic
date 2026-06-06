@@ -8,8 +8,7 @@ filter in real time; Enter selects.
 
 import logging
 
-from ..primitives import Colors, input_with_esc, CancelInput
-from ..widgets import FilterList
+from chotic_ui import Colors, input_with_esc, CancelInput, FilterList
 
 
 _MODEL_CACHE = None
