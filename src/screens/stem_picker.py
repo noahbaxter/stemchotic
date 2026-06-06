@@ -40,7 +40,7 @@ def _layout():
 
 def new_state() -> dict:
     """Fresh, session-long picker state."""
-    return {"selected": set(), "output_format": "WAV", "idx": 0}
+    return {"selected": set(), "output_format": "WAV", "idx": 0, "model_override": None}
 
 
 def show_stem_picker(state: dict) -> dict | None:
@@ -73,15 +73,19 @@ def show_stem_picker(state: dict) -> dict | None:
         menu.add_item(MenuItem(
             label=f"{Colors.MUTED}Output format:{Colors.RESET} {output_format}  {Colors.DIM}(Enter cycles){Colors.RESET}",
             value=ACTION_FORMAT, pinned=True))
-        menu.add_item(MenuItem(
-            label=f"{Colors.MUTED}Pick a specific model…{Colors.RESET}",
-            hotkey="M", value=ACTION_MODEL, pinned=True))
+        override = state.get("model_override")
+        model_label_txt = (f"{Colors.GREEN}Model override:{Colors.RESET} {override}"
+                           if override else f"{Colors.MUTED}Pick a specific model…{Colors.RESET}")
+        menu.add_item(MenuItem(label=model_label_txt, hotkey="M", value=ACTION_MODEL, pinned=True))
         menu.add_item(MenuDivider(pinned=True))
         menu.add_item(MenuItem(
             label=f"{Colors.HOTKEY}Start splitting{Colors.RESET}  {Colors.DIM}→ choose audio file{Colors.RESET}",
             value=ACTION_SEPARATE, pinned=True))
 
-        menu.status_line = f"{plan_text(list(selected))}    |    format: {output_format}"
+        if override:
+            menu.status_line = f"Override active: {override}  —  Start splitting runs this on the whole track"
+        else:
+            menu.status_line = f"{plan_text(list(selected))}    |    format: {output_format}"
 
         result = menu.run(initial_index=idx)
         if result is None:
@@ -102,12 +106,17 @@ def show_stem_picker(state: dict) -> dict | None:
             continue
 
         if val == ACTION_MODEL:
-            chosen = show_model_picker()
-            if chosen:
-                return {"selected": list(selected), "output_format": output_format, "model_override": chosen}
-            continue
+            action, model = show_model_picker(state.get("model_override"))
+            if action == "set":
+                state["model_override"] = model
+            elif action == "clear":
+                state["model_override"] = None
+            continue  # back to the picker; only Start splitting actually runs
 
         if val == ACTION_SEPARATE:
+            override = state.get("model_override")
+            if override:
+                return {"selected": list(selected), "output_format": output_format, "model_override": override}
             if not selected:
                 continue
             return {"selected": list(selected), "output_format": output_format, "model_override": None}

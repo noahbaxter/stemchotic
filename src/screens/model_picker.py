@@ -17,41 +17,53 @@ from chotic_ui import Colors, Menu, MenuItem, MenuDivider, FilterList
 _SDR_NUM = re.compile(r"\(([\d.]+)\)")
 
 
-# Curated picks: (label, model_filename, why)
+_BS = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"
+
+# Curated picks by stem grouping: (label, model_filename, why)
 CURATED = [
-    ("Karaoke (vocals + instrumental)", "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
-     "Best instrumental, vocals nearly best, one pass"),
-    ("Cleanest vocals", "vocals_mel_band_roformer.ckpt",
-     "Highest vocal SDR (12.6)"),
-    ("Full band (6 stems)", "htdemucs_6s.yaml",
-     "drums/bass/vocals/guitar/piano/other"),
-    ("Best drums + bass", "htdemucs_ft.yaml",
-     "Top rhythm SDR (10.0 / 12.0), slower"),
+    ("Vocals (cleanest)", "vocals_mel_band_roformer.ckpt", "Best vocal isolation (12.6)"),
+    ("Instrumental (cleanest)", _BS, "Best instrumental (16.5)"),
+    ("Vocals + Instrumental", _BS, "Karaoke split, both in one pass"),
+    ("4-stem: drums / bass / vocals / other", "htdemucs_ft.yaml", "Best 4-stem, slower"),
+    ("Full band: 6 stems", "htdemucs_6s.yaml", "+ guitar / piano / other"),
 ]
 
 _CATALOG = None
 
 
-def show_model_picker() -> str | None:
-    """Curated picks + an Advanced entry. Returns a model filename or None."""
-    menu = Menu(
-        title="Pick a model",
-        subtitle="Recommended picks for common goals, or browse everything.",
-        esc_label="Back",
-    )
-    for label, model, why in CURATED:
-        menu.add_item(MenuItem(label=label, value=("model", model), description=why))
-    menu.add_item(MenuDivider())
-    menu.add_item(MenuItem(label=f"{Colors.HOTKEY}Advanced:{Colors.RESET} all models, ranked by SDR…",
-                           value=("advanced", None)))
+def show_model_picker(current: str | None = None) -> tuple[str, str | None]:
+    """Curated picks + Advanced browser. Returns one of:
+    ("set", filename), ("clear", None), or ("cancel", None). Picking a model only
+    sets the override; the caller decides when to actually run."""
+    while True:
+        menu = Menu(
+            title="Pick a model",
+            subtitle="Recommended picks by stem grouping, or browse everything.",
+            esc_label="Back",
+        )
+        for label, model, why in CURATED:
+            mark = f"{Colors.GREEN}● {Colors.RESET}" if model == current else "  "
+            menu.add_item(MenuItem(label=f"{mark}{label}", value=("model", model), description=why))
+        menu.add_item(MenuDivider())
+        menu.add_item(MenuItem(label=f"{Colors.HOTKEY}Advanced:{Colors.RESET} all models, ranked by SDR…",
+                               value=("advanced", None)))
+        if current:
+            menu.add_item(MenuItem(label=f"{Colors.MUTED}Clear override (use stem picks){Colors.RESET}",
+                                   value=("clear", None)))
 
-    result = menu.run()
-    if result is None:
-        return None
-    kind, payload = result.value
-    if kind == "model":
-        return payload
-    return _advanced_model_list()
+        result = menu.run()
+        if result is None:
+            return ("cancel", None)
+        kind, payload = result.value
+        if kind == "model":
+            return ("set", payload)
+        if kind == "clear":
+            return ("clear", None)
+        if kind == "advanced":
+            chosen = _advanced_model_list()
+            if chosen is None:
+                continue  # Esc in Advanced returns here, not to the main picker
+            return ("set", chosen)
 
 
 def _load_catalog():
