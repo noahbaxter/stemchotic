@@ -1,0 +1,4 @@
+# Core engine: python-audio-separator (pinned). The [cpu] extra gets CoreML
+# acceleration on Apple Silicon and CPU/ONNX elsewhere. For NVIDIA, swap to
+# audio-separator[gpu].
+audio-separator[cpu]==0.44.2

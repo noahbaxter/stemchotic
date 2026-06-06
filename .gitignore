@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Stemchotic output and model cache
+stems/
+models/
+
+# OS
+.DS_Store
