@@ -48,8 +48,11 @@ Output files are written **next to the input file**.
 In the picker, each stem you highlight implies its model, and the line under the
 box shows the exact plan (which model(s), how many passes, single-stem vs
 filtered). Pick exactly one stem and it optimises for that one file; pick vocals
-or instrumental and it routes to the dedicated BS-RoFormer model. "Advanced" lets
-you set the output format or force a specific model directly.
+or instrumental and it routes to the dedicated BS-RoFormer model. The drum-kit
+pieces (kick/snare/toms/cymbals) are nested under Drums. "Advanced" lets you set
+the output format or browse all ~160 models (filter by typing `/`, each tagged
+with its architecture and best stem) and force one directly. Your selection
+persists for the whole session.
 
 ## Presets (CLI shortcuts)
 

@@ -43,10 +43,11 @@ def do_run(selected, input_file, output_format="WAV", model_override=None):
 
 def run_tui():
     from src.ui import clear_screen, input_with_esc, CancelInput
-    from src.ui.screens import show_stem_picker
+    from src.ui.screens import show_stem_picker, new_state
 
+    state = new_state()  # persists for the whole session
     while True:
-        choice = show_stem_picker()
+        choice = show_stem_picker(state)
         if choice is None:
             clear_screen()
             print("Bye.")
