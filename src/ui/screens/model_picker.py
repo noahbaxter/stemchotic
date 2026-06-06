@@ -1,15 +1,15 @@
 """
-Model picker - browse and filter all available models.
+Model picker - browse and live-filter all available models.
 
 Shows every model python-audio-separator knows about, tagged with its
-architecture and best stem/SDR, so you never have to know a filename. Press `/`
-to filter by typing; Enter selects.
+architecture and best stem/SDR, so you never have to know a filename. Type to
+filter in real time; Enter selects.
 """
 
 import logging
 
 from ..primitives import Colors, input_with_esc, CancelInput
-from ..widgets import Menu, MenuItem
+from ..widgets import FilterList
 
 
 _MODEL_CACHE = None
@@ -52,44 +52,14 @@ def show_model_picker() -> str | None:
             pass
         return None
 
-    filter_str = ""
-    idx = 0
+    # (label, value) where value is the filename; label carries a dim tag.
+    items = [(f"{fn}   {Colors.DIM}{tag}{Colors.RESET}", fn) for fn, tag in models]
 
-    while True:
-        f = filter_str.lower()
-        matches = [m for m in models if f in (m[0] + " " + m[1]).lower()] if f else models
-
-        sub = f"{len(matches)} of {len(models)} models"
-        sub += f"   ·   filter: '{filter_str}'" if filter_str else "   ·   press / to filter"
-        menu = Menu(title="Pick a model", subtitle=sub, esc_label="Back")
-
-        menu.add_item(MenuItem(label=f"{Colors.HOTKEY}/ Filter...{Colors.RESET}",
-                               hotkey="/", value=("filter", None), pinned=True))
-        if filter_str:
-            menu.add_item(MenuItem(label=f"{Colors.MUTED}Clear filter{Colors.RESET}",
-                                   value=("clear", None), pinned=True))
-
-        for fn, tag in matches:
-            menu.add_item(MenuItem(label=f"{fn}   {Colors.DIM}{tag}{Colors.RESET}", value=("model", fn)))
-
-        result = menu.run(initial_index=idx)
-        if result is None:
-            return None
-
-        try:
-            idx = menu.items.index(result.item)
-        except ValueError:
-            idx = 0
-
-        kind, payload = result.value
-        if kind == "model":
-            return payload
-        if kind == "filter":
-            try:
-                filter_str = input_with_esc("  Filter: ").strip()
-            except CancelInput:
-                pass
-            idx = 0
-        elif kind == "clear":
-            filter_str = ""
-            idx = 0
+    picker = FilterList(
+        items,
+        title="Pick a model",
+        subtitle="Type to filter by name, architecture, or stem.",
+        esc_label="Back",
+        prompt="Filter",
+    )
+    return picker.run()

@@ -11,6 +11,7 @@ from .menu import (
     MenuResult,
 )
 from .confirm import ConfirmDialog
+from .filter_list import FilterList
 
 __all__ = [
     "Menu",
@@ -20,4 +21,5 @@ __all__ = [
     "MenuAction",
     "MenuResult",
     "ConfirmDialog",
+    "FilterList",
 ]
