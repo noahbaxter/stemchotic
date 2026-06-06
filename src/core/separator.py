@@ -62,36 +62,35 @@ def run(
     selected: list[str],
     input_file: str,
     output_format: str = "WAV",
-    model_override: str | None = None,
+    models: dict | None = None,
+    one_pass: str | None = None,
     progress=_noop,
 ) -> list[str]:
     """
     Separate `input_file` according to the selected stems. Output files are
     written to the SAME directory as the input. Returns the kept output paths.
 
-    `model_override` forces a single raw model pass (all its stems) and ignores
-    `selected` - the "pick it yourself" escape hatch.
+    `models`: per-category model overrides. `one_pass`: run a single model for the
+    whole selection (filtered to the selected stems).
     """
     input_file = os.path.abspath(input_file)
     if not os.path.isfile(input_file):
         raise RuntimeError(f"File not found: {input_file}")
     out_dir = os.path.dirname(input_file) or os.getcwd()
 
-    if model_override:
-        passes = [Pass(engine="custom", model=model_override, stems=[])]
-    else:
-        passes = resolve(selected)
+    passes = resolve(selected, models, one_pass)
     if not passes:
         raise RuntimeError("Nothing selected.")
 
+    rhythm_model = (models or {}).get("rhythm", ENGINE_MODEL["rhythm"])
     results: list[str] = []
     total = len(passes)
     for i, p in enumerate(passes, 1):
         if p.cascade_drums:
-            progress(f"[{i}/{total}] Extracting drums (HTDemucs)...")
+            progress(f"[{i}/{total}] Extracting drums ({rhythm_model})...")
             drums = _separate(
                 _make_separator(out_dir, single_stem="Drums"),
-                ENGINE_MODEL["rhythm"], input_file,
+                rhythm_model, input_file,
             )
             drums_path = drums[0]
             progress(f"[{i}/{total}] Splitting kit (drumsep)...")

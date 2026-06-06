@@ -72,6 +72,35 @@ CLI_PRESETS = {
 }
 
 
+# Pretty short names for display; arbitrary models fall back to the filename stem.
+MODEL_SHORT = {
+    BS_ROFORMER: "BS-RoFormer",
+    HTDEMUCS: "HTDemucs",
+    HTDEMUCS_6S: "HTDemucs 6s",
+    DRUMSEP: "drumsep",
+    "htdemucs_ft.yaml": "HTDemucs FT",
+    "hdemucs_mmi.yaml": "HDemucs MMI",
+    "vocals_mel_band_roformer.ckpt": "Mel-Band",
+}
+
+
+def short_name(filename: str) -> str:
+    if filename in MODEL_SHORT:
+        return MODEL_SHORT[filename]
+    base = filename.rsplit(".", 1)[0]
+    return base if len(base) <= 18 else base[:17] + "…"
+
+
+def model_for(stem: str, models: dict | None = None) -> str:
+    """The model filename a stem uses, honoring per-category overrides."""
+    cat = _NAME_TO_ENGINE.get(stem, "")
+    return (models or {}).get(cat, ENGINE_MODEL.get(cat, ""))
+
+
+def display_model(stem: str, models: dict | None = None) -> str:
+    return short_name(model_for(stem, models))
+
+
 @dataclass
 class Pass:
     engine: str
@@ -81,9 +110,17 @@ class Pass:
     cascade_drums: bool = False     # kit: extract drums first, then drumsep
 
 
-def resolve(selected: list[str]) -> list[Pass]:
-    """Group selected stems by engine into concrete passes, preserving the
-    STEM_OPTIONS order."""
+def resolve(selected: list[str], models: dict | None = None, one_pass: str | None = None) -> list[Pass]:
+    """Concrete passes for a selection.
+
+    `models`: per-category model overrides {category: filename}.
+    `one_pass`: a single model to run for the whole selection (cross-category),
+    filtered to the selected stems.
+    """
+    if one_pass:
+        single = selected[0] if len(selected) == 1 else None
+        return [Pass(engine="custom", model=one_pass, stems=list(selected), single_stem=single)]
+
     by_engine: dict[str, list[str]] = {}
     for opt in STEM_OPTIONS:               # stable, deterministic order
         if opt.name in selected:
@@ -91,7 +128,8 @@ def resolve(selected: list[str]) -> list[Pass]:
 
     passes: list[Pass] = []
     for engine, stems in by_engine.items():
-        p = Pass(engine=engine, model=ENGINE_MODEL[engine], stems=stems)
+        model = (models or {}).get(engine, ENGINE_MODEL[engine])
+        p = Pass(engine=engine, model=model, stems=stems)
         if engine == "kit":
             p.cascade_drums = True
         elif len(stems) == 1:
@@ -100,21 +138,22 @@ def resolve(selected: list[str]) -> list[Pass]:
     return passes
 
 
-def plan_text(selected: list[str]) -> str:
-    """One-line, human-readable description of what the current selection will
-    run. Shown live below the picker."""
+def plan_text(selected: list[str], models: dict | None = None, one_pass: str | None = None) -> str:
+    """One-line description of what the current selection will run."""
     if not selected:
-        return "Nothing selected - highlight stems with Space, then Enter on Separate."
+        return "Nothing selected - pick stems with Space, then Start splitting."
 
-    passes = resolve(selected)
+    if one_pass:
+        return f"1 pass: {short_name(one_pass)} -> {', '.join(selected)} (one model)"
+
     parts = []
-    for p in passes:
-        if p.single_stem:
-            parts.append(f"{ENGINE_LABEL[p.engine]} -> {p.single_stem} only")
-        elif p.cascade_drums:
+    for p in resolve(selected, models):
+        label = short_name(p.model)
+        if p.cascade_drums:
             parts.append(f"drums -> drumsep -> {', '.join(p.stems)}")
+        elif p.single_stem:
+            parts.append(f"{label} -> {p.single_stem} only")
         else:
-            parts.append(f"{ENGINE_LABEL[p.engine]} -> {', '.join(p.stems)}")
-    n = len(passes)
-    prefix = f"{n} pass{'es' if n > 1 else ''}: "
-    return prefix + "  ·  ".join(parts)
+            parts.append(f"{label} -> {', '.join(p.stems)}")
+    n = len(parts)
+    return f"{n} pass{'es' if n > 1 else ''}: " + "  ·  ".join(parts)

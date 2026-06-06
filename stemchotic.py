@@ -22,14 +22,14 @@ def list_presets():
     print("\n  (or run with no args for the interactive picker)\n")
 
 
-def do_run(selected, input_file, output_format="WAV", model_override=None):
-    print(f"\n  Plan: {plan_text(selected)}")
+def do_run(selected, input_file, output_format="WAV", models=None, one_pass=None):
+    print(f"\n  Plan: {plan_text(selected, models, one_pass)}")
     print(f"  Output -> next to {input_file}\n")
     try:
         outputs = run(
             selected, input_file,
             output_format=output_format,
-            model_override=model_override,
+            models=models, one_pass=one_pass,
             progress=lambda m: print(f"  {m}"),
         )
     except Exception as e:
@@ -65,7 +65,7 @@ def run_tui():
         do_run(
             choice["selected"], input_file.strip(),
             output_format=choice["output_format"],
-            model_override=choice["model_override"],
+            models=choice.get("models"), one_pass=choice.get("one_pass"),
         )
         try:
             input_with_esc("\n  Press Enter to return to the picker... ")
