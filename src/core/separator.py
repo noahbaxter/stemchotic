@@ -58,6 +58,44 @@ def _filter_to(paths: list[str], keep: list[str]) -> list[str]:
     return kept
 
 
+def _merge_pieces(paths: list[str], merge: dict, out_dir: str, output_format: str) -> list[str]:
+    """Sum groups of kit pieces into one (e.g. hh+ride+crash -> Cymbals), delete
+    the parts. `merge` is {new_name: [piece_substrings]}."""
+    import soundfile as sf
+    import numpy as np
+
+    kept = list(paths)
+    ext = output_format.lower()
+    for new_name, parts in merge.items():
+        part_paths = [p for p in kept
+                      if any(f"({pt.lower()})" in Path(p).stem.lower() for pt in parts)]
+        if not part_paths:
+            continue
+        mix, sr = None, None
+        for pp in part_paths:
+            audio, sr = sf.read(pp)
+            mix = audio if mix is None else mix + audio
+        mix = np.clip(mix, -1.0, 1.0)
+
+        # Name the merged file off a part path, swapping the piece token for new_name.
+        stem = Path(part_paths[0]).stem
+        for pt in parts:
+            if f"({pt})" in stem:
+                stem = stem.replace(f"({pt})", f"({new_name})")
+                break
+        out_path = os.path.join(out_dir, f"{stem}.{ext}")
+        sf.write(out_path, mix, sr)
+
+        for pp in part_paths:
+            kept.remove(pp)
+            try:
+                os.remove(pp)
+            except OSError:
+                pass
+        kept.append(out_path)
+    return kept
+
+
 def run(
     selected: list[str],
     input_file: str,
@@ -98,7 +136,12 @@ def run(
                 _make_separator(out_dir, output_format=output_format),
                 p.model, drums_path,
             )
-            results += _filter_to(outs, p.stems) if p.stems else outs  # whole kit
+            if p.stems:
+                results += _filter_to(outs, p.stems)
+            elif p.merge:
+                results += _merge_pieces(outs, p.merge, out_dir, output_format)
+            else:
+                results += outs            # whole kit, all pieces
         else:
             label = p.single_stem or ", ".join(p.stems) or p.model
             progress(f"[{i}/{total}] {p.model} -> {label} (this is the slow part)...")

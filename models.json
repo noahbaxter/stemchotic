@@ -15,13 +15,13 @@
     "htdemucs_ft.yaml": "HTDemucs FT",
     "htdemucs_6s.yaml": "HTDemucs 6s",
     "hdemucs_mmi.yaml": "HDemucs MMI",
-    "drumsep.th": "DrumSep 4",
-    "MDX23C-DrumSep-aufr33-jarredou.ckpt": "DrumSep 6"
+    "MDX23C-DrumSep-aufr33-jarredou.ckpt": "DrumSep"
   },
 
-  "_kit_comment": "Drum-kit splitters: each runs as a cascade (extract drums, then split). Pieces produced are whatever the model outputs.",
+  "_kit_comment": "Drum-kit splitters: cascade (extract drums, then split). Both use the 6-piece catalogue model; the 4-piece groups hh/ride/crash into Cymbals afterward.",
   "kit_models": [
-    {"name": "4 piece (Kick/Snare/Toms/Cymbals)", "model": "drumsep.th"},
+    {"name": "4 piece (Kick/Snare/Toms/Cymbals)", "model": "MDX23C-DrumSep-aufr33-jarredou.ckpt",
+     "merge": {"Cymbals": ["hh", "ride", "crash"]}},
     {"name": "6 piece (Kick/Snare/Toms/HH/Ride/Crash)", "model": "MDX23C-DrumSep-aufr33-jarredou.ckpt"}
   ],
 
