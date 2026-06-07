@@ -44,6 +44,7 @@ STEM_OPTIONS = [
 
 _NAME_TO_ENGINE = {s.name: s.engine for s in STEM_OPTIONS}
 _STEM_MODEL = {s.name: s.model for s in STEM_OPTIONS if s.model}
+_KIT_NAMES = [s.name for s in STEM_OPTIONS if s.engine == "kit"]
 
 
 # CLI shortcuts -> default stem selections.
@@ -52,9 +53,11 @@ CLI_PRESETS = {
     "instrumental": ["Instrumental"],
     "band": ["Drums", "Bass", "Vocals", "Guitar", "Piano", "Other"],
     "drums": ["Drums"],
-    "kit": ["Kick", "Snare", "Toms", "Cymbals"],
     "bass": ["Bass"],
 }
+if _KIT_NAMES:
+    CLI_PRESETS["kit"] = [_KIT_NAMES[-1]]   # default kit = the 6-piece (last)
+    CLI_PRESETS["kit4"] = [_KIT_NAMES[0]]   # the 4-piece
 
 
 def short_name(filename: str) -> str:
