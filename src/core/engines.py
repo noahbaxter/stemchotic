@@ -27,6 +27,7 @@ class StemOption:
     engine: str          # roformer | rhythm | extra | kit
     experimental: bool = False
     model: str = ""      # kit options carry their own drumsep model
+    pieces: tuple | None = None  # kit: the model's output piece names
     merge: dict | None = None  # kit: group output pieces, e.g. {"Cymbals": ["hh","ride","crash"]}
 
 
@@ -40,7 +41,8 @@ STEM_OPTIONS = [
     StemOption("Guitar", "extra"),
     StemOption("Piano", "extra"),
     StemOption("Other", "extra"),
-] + [StemOption(k["name"], "kit", experimental=True, model=k["model"], merge=k.get("merge"))
+] + [StemOption(k["name"], "kit", experimental=True, model=k["model"],
+                pieces=tuple(k.get("pieces", [])), merge=k.get("merge"))
      for k in CONFIG.get("kit_models", [])]
 
 _NAME_TO_ENGINE = {s.name: s.engine for s in STEM_OPTIONS}
@@ -102,6 +104,7 @@ class Pass:
     stems: list[str]               # stems to keep from this engine
     single_stem: str | None = None  # exactly-one -> output_single_stem (one file)
     cascade_drums: bool = False     # kit: extract drums first, then drumsep
+    pieces: tuple | None = None     # kit: the drumsep model's output pieces
     merge: dict | None = None       # kit: group output pieces post-split
 
 
@@ -123,7 +126,7 @@ def resolve(selected: list[str], models: dict | None = None, one_pass: str | Non
             continue
         if opt.engine == "kit":            # each kit option = its own whole-kit cascade
             kit_passes.append(Pass(engine="kit", model=opt.model, stems=[],
-                                   cascade_drums=True, merge=opt.merge))
+                                   cascade_drums=True, pieces=opt.pieces, merge=opt.merge))
         else:
             by_engine.setdefault(opt.engine, []).append(opt.name)
 

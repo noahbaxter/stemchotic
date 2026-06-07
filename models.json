@@ -21,8 +21,10 @@
   "_kit_comment": "Drum-kit splitters: cascade (extract drums, then split). Both use the 6-piece catalogue model; the 4-piece groups hh/ride/crash into Cymbals afterward.",
   "kit_models": [
     {"name": "4 piece (Kick/Snare/Toms/Cymbals)", "model": "MDX23C-DrumSep-aufr33-jarredou.ckpt",
+     "pieces": ["kick", "snare", "toms", "hh", "ride", "crash"],
      "merge": {"Cymbals": ["hh", "ride", "crash"]}},
-    {"name": "6 piece (Kick/Snare/Toms/HH/Ride/Crash)", "model": "MDX23C-DrumSep-aufr33-jarredou.ckpt"}
+    {"name": "6 piece (Kick/Snare/Toms/HH/Ride/Crash)", "model": "MDX23C-DrumSep-aufr33-jarredou.ckpt",
+     "pieces": ["kick", "snare", "toms", "hh", "ride", "crash"]}
   ],
 
   "curated": [

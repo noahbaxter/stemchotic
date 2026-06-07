@@ -14,6 +14,22 @@ from pathlib import Path
 from .engines import Pass, resolve, ENGINE_MODEL
 
 
+def _pretty(stem: str) -> str:
+    """Display form of a stem name: 'kick' -> 'Kick', 'hh' -> 'HH'."""
+    return stem.upper() if len(stem) <= 2 else stem.capitalize()
+
+
+def _names(base: str, stems) -> dict:
+    """custom_output_names mapping the model's stem names to '<base> [Stem]'.
+    Includes case variants so it matches whatever casing the model emits."""
+    out = {}
+    for s in stems:
+        nm = f"{base} [{_pretty(s)}]"
+        for key in {s, s.lower(), s.capitalize(), s.upper()}:
+            out[key] = nm
+    return out
+
+
 def _noop(_msg: str) -> None:
     pass
 
@@ -35,11 +51,12 @@ def _make_separator(output_dir: str, single_stem=None, output_format="WAV"):
     )
 
 
-def _separate(separator, model: str, input_file: str) -> list[str]:
-    """Run one model pass; return absolute output paths."""
+def _separate(separator, model: str, input_file: str, names: dict | None = None) -> list[str]:
+    """Run one model pass; return absolute output paths. `names` sets the output
+    filenames explicitly (audio-separator custom_output_names)."""
     separator.load_model(model_filename=model)
-    names = separator.separate(input_file)
-    return [os.path.join(separator.output_dir, n) for n in names]
+    out = separator.separate(input_file, names) if names else separator.separate(input_file)
+    return [n if os.path.isabs(n) else os.path.join(separator.output_dir, n) for n in out]
 
 
 def _filter_to(paths: list[str], keep: list[str]) -> list[str]:
@@ -58,9 +75,10 @@ def _filter_to(paths: list[str], keep: list[str]) -> list[str]:
     return kept
 
 
-def _merge_pieces(paths: list[str], merge: dict, out_dir: str, output_format: str) -> list[str]:
+def _merge_pieces(paths: list[str], merge: dict, base: str, output_format: str) -> list[str]:
     """Sum groups of kit pieces into one (e.g. hh+ride+crash -> Cymbals), delete
-    the parts. `merge` is {new_name: [piece_substrings]}."""
+    the parts. Pieces are matched by their '[name]' token. `merge` is
+    {new_name: [piece_names]}."""
     import soundfile as sf
     import numpy as np
 
@@ -68,7 +86,7 @@ def _merge_pieces(paths: list[str], merge: dict, out_dir: str, output_format: st
     ext = output_format.lower()
     for new_name, parts in merge.items():
         part_paths = [p for p in kept
-                      if any(f"({pt.lower()})" in Path(p).stem.lower() for pt in parts)]
+                      if any(f"[{pt.lower()}]" in Path(p).stem.lower() for pt in parts)]
         if not part_paths:
             continue
         mix, sr = None, None
@@ -77,13 +95,7 @@ def _merge_pieces(paths: list[str], merge: dict, out_dir: str, output_format: st
             mix = audio if mix is None else mix + audio
         mix = np.clip(mix, -1.0, 1.0)
 
-        # Name the merged file off a part path, swapping the piece token for new_name.
-        stem = Path(part_paths[0]).stem
-        for pt in parts:
-            if f"({pt})" in stem:
-                stem = stem.replace(f"({pt})", f"({new_name})")
-                break
-        out_path = os.path.join(out_dir, f"{stem}.{ext}")
+        out_path = os.path.join(os.path.dirname(part_paths[0]), f"{base} [{new_name}].{ext}")
         sf.write(out_path, mix, sr)
 
         for pp in part_paths:
@@ -120,6 +132,7 @@ def run(
     if not passes:
         raise RuntimeError("Nothing selected.")
 
+    base = Path(input_file).stem
     rhythm_model = (models or {}).get("rhythm", ENGINE_MODEL["rhythm"])
     results: list[str] = []
     total = len(passes)
@@ -134,19 +147,19 @@ def run(
             progress(f"[{i}/{total}] Splitting kit ({p.model})...")
             outs = _separate(
                 _make_separator(out_dir, output_format=output_format),
-                p.model, drums_path,
+                p.model, drums_path, _names(base, p.pieces or []),
             )
-            if p.stems:
-                results += _filter_to(outs, p.stems)
-            elif p.merge:
-                results += _merge_pieces(outs, p.merge, out_dir, output_format)
-            else:
-                results += outs            # whole kit, all pieces
+            try:
+                os.remove(drums_path)      # drop the intermediate drums stem
+            except OSError:
+                pass
+            results += _merge_pieces(outs, p.merge, base, output_format) if p.merge else outs
         else:
             label = p.single_stem or ", ".join(p.stems) or p.model
             progress(f"[{i}/{total}] {p.model} -> {label} (this is the slow part)...")
+            keep = [p.single_stem] if p.single_stem else p.stems
             sep = _make_separator(out_dir, single_stem=p.single_stem, output_format=output_format)
-            outs = _separate(sep, p.model, input_file)
+            outs = _separate(sep, p.model, input_file, _names(base, keep))
             if p.single_stem or not p.stems:
                 results += outs            # already exactly what was asked
             else:
