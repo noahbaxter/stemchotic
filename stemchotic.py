@@ -11,7 +11,8 @@ import argparse
 import sys
 
 from src import __version__
-from src.core.engines import CLI_PRESETS, plan_text
+from src.core.engines import CLI_PRESETS, plan_text, resolve, ENGINE_MODEL
+from src.core.model_cache import missing_models, confirm_downloads
 from src.core.separator import run
 
 
@@ -22,9 +23,15 @@ def list_presets():
     print("\n  (or run with no args for the interactive picker)\n")
 
 
-def do_run(selected, input_file, output_format="WAV", models=None, one_pass=None):
+def do_run(selected, input_file, output_format="WAV", models=None, one_pass=None, assume_yes=False):
     print(f"\n  Plan: {plan_text(selected, models, one_pass)}")
     print(f"  Output -> next to {input_file}\n")
+    passes = resolve(selected, models, one_pass)
+    rhythm = (models or {}).get("rhythm", ENGINE_MODEL["rhythm"])
+    print("  Checking model cache...")
+    if not confirm_downloads(missing_models(passes, rhythm), assume_yes):
+        print("  Cancelled (no models downloaded).")
+        return 1
     try:
         outputs = run(
             selected, input_file,
@@ -79,6 +86,8 @@ def main(argv=None):
     parser.add_argument("preset", nargs="?", help="Preset key (see --list)")
     parser.add_argument("input", nargs="?", help="Input audio file")
     parser.add_argument("-l", "--list", action="store_true", help="List presets and exit")
+    parser.add_argument("-y", "--yes", action="store_true",
+                        help="Skip the model-download confirmation")
     parser.add_argument("-v", "--version", action="version", version=f"stemchotic {__version__}")
     args = parser.parse_args(argv)
 
@@ -90,7 +99,7 @@ def main(argv=None):
         if args.preset not in CLI_PRESETS:
             print(f"Unknown preset '{args.preset}'. Use --list to see options.")
             return 1
-        return do_run(CLI_PRESETS[args.preset], args.input)
+        return do_run(CLI_PRESETS[args.preset], args.input, assume_yes=args.yes)
 
     if args.preset and not args.input:
         print("Missing input file. Usage: stemchotic <preset> <file>  (or no args for the picker)")
