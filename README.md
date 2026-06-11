@@ -17,9 +17,43 @@ multi-stem (filtered) output, vocals/instrumental routing to RoFormer, output
 next to the input, and silenced logging are all verified on real files. The
 drum-kit cascade (drums via HTDemucs, then split into kit pieces via MDX23C
 DrumSep) is verified end to end on real audio, in both 4-piece and 6-piece
-form and in WAV and FLAC output.
+form and in WAV and FLAC output. Launcher built and release pipeline in place;
+Windows/Linux smoke tests pending.
 
 ## Install
+
+Grab the launcher for your OS from
+[GitHub Releases](https://github.com/noahbaxter/stemchotic/releases/latest):
+
+- `stemchotic-launcher-macos`
+- `stemchotic-launcher.exe`
+- `stemchotic-launcher-linux`
+
+Put it in a folder you like and run it. Everything it installs goes into a
+`.stemchotic/` folder next to it, so nothing lands in system directories.
+
+**First run:** the launcher checks for the latest release, downloads the app,
+then asks one consent question before installing Python and the audio
+dependencies. On GPU platforms this is roughly a 2.5 GB download; on Apple
+Silicon it's much less. The launcher auto-detects NVIDIA GPUs. On Windows
+without NVIDIA it asks whether you have an AMD or Intel GPU (DirectML
+acceleration) or want the CPU build.
+
+Separation models are not bundled. Each model downloads on first use with its
+own size prompt. Pass `-y/--yes` to stemchotic (or use a CLI preset with
+`--yes`) to skip those prompts.
+
+**Later runs:** instant launch with an automatic update check.
+
+### Maintenance flags
+
+| Flag | What it does |
+|---|---|
+| `--clean` | Reinstalls the app and env; asks before touching downloaded models |
+| `--setup` | Re-runs the hardware/GPU question |
+| `--offline` | Skips the update check and launches from the local install |
+
+### From source (developers)
 
 The TUI toolkit lives in the [chotic-ui](https://github.com/noahbaxter/chotic-ui)
 submodule, so clone with submodules (or init them after):
@@ -41,8 +75,8 @@ NVIDIA GPU, change the extra to `[gpu]` in `requirements.txt`.
 # Interactive picker: highlight the stems you want, hit Separate
 python stemchotic.py
 
-# Direct, via a CLI preset
-python stemchotic.py drums song.wav
+# Direct, via a CLI preset (-y skips per-model download prompts)
+python stemchotic.py drums song.wav -y
 
 # List presets
 python stemchotic.py --list
