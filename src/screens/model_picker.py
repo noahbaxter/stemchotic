@@ -12,7 +12,6 @@ instrumental; drums/bass/guitar/piano all come from the 4-/6-stem demucs models,
 so those sections list the same handful (ranked by the relevant stem's SDR).
 """
 
-import logging
 import re
 
 from chotic_ui import Colors, FilterList
@@ -60,8 +59,8 @@ def _load_catalog():
     global _CATALOG
     if _CATALOG is not None:
         return _CATALOG
-    from audio_separator.separator import Separator
-    data = Separator(log_level=logging.ERROR).get_simplified_model_list()
+    from ..core.separator import _make_separator
+    data = _make_separator().get_simplified_model_list()
     _CATALOG = [(fn, info.get("Type", "?"), _parse(info)) for fn, info in data.items()]
     return _CATALOG
 

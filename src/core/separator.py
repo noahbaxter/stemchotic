@@ -34,20 +34,35 @@ def _noop(_msg: str) -> None:
     pass
 
 
-def _make_separator(output_dir: str, single_stem=None, output_format="WAV"):
-    """Construct a Separator with logging silenced. Raises a friendly error if
-    the dependency is missing."""
+def model_dir() -> str | None:
+    """Pinned model cache when launched via the launcher (STEMCHOTIC_ROOT set),
+    else None -> audio-separator's default cache (dev runs)."""
+    root = os.environ.get("STEMCHOTIC_ROOT")
+    return os.path.join(root, ".stemchotic", "models") if root else None
+
+
+def _make_separator(output_dir=None, single_stem=None, output_format="WAV"):
+    """Construct a Separator with logging silenced and the model cache pinned
+    under STEMCHOTIC_ROOT when launched via the launcher. Raises a friendly
+    error if the dependency is missing."""
     try:
         from audio_separator.separator import Separator
     except ImportError as e:
         raise RuntimeError(
             "audio-separator is not installed. Run: pip install -r requirements.txt"
         ) from e
+    kwargs = {}
+    md = model_dir()
+    if md:
+        os.makedirs(md, exist_ok=True)
+        kwargs["model_file_dir"] = md
+    if output_dir is not None:
+        kwargs["output_dir"] = output_dir
     return Separator(
         log_level=logging.ERROR,          # kill the INFO wall-of-text
-        output_dir=output_dir,
         output_single_stem=single_stem,   # one file out when set
         output_format=output_format,
+        **kwargs,
     )
 
 
