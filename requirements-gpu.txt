@@ -1,0 +1,11 @@
+# NVIDIA variant, installed by the launcher when nvidia-smi reports a GPU.
+# Same pin as requirements.txt with the [gpu] extra (onnxruntime-gpu).
+#
+# The audio-separator README does not pin a torch index; it says to install
+# PyTorch "using the command recommended by the wizard at
+# https://pytorch.org/get-started/locally/". On Windows the PyPI torch wheel
+# is CPU-only, so we add the pytorch.org cu124 index. On Linux the PyPI wheel
+# already bundles CUDA, so the extra index is redundant but harmless there.
+--extra-index-url https://download.pytorch.org/whl/cu124
+audio-separator[gpu]==0.44.2
+-e ./libs/chotic-ui

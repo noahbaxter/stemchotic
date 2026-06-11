@@ -1,0 +1,4 @@
+# DirectML variant (AMD/Intel GPUs on Windows), chosen in the launcher
+# questionnaire. The [dml] extra pulls onnxruntime-directml + torch_directml.
+audio-separator[dml]==0.44.2
+-e ./libs/chotic-ui
