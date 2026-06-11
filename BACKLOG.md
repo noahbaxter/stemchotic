@@ -10,14 +10,10 @@
   Priority note: charters widely prefer mvsep's BS-Roformer-SW, but several say the
   gap over demucs is "marginal" (demucs is "very good", the emergency/fallback). So
   this is a nice upgrade, not urgent - our local demucs default is genuinely fine.
-- Verify the kit models load: drumsep.th (external, 4-piece) and MDX23C-DrumSep
-  (catalogue, 6-piece kick/snare/toms/hh/ride/crash). The catalogue one should
-  "just work" (auto-downloads); drumsep.th is the unproven one.
 - Optimal per-model settings: we run audio-separator's defaults (segment size,
   overlap, shifts). Not tuned. Worth a pass once the model set settles.
 - Confirm exact model filenames against `audio-separator --list_models` (the
   roformer checkpoint name drifts between releases).
-- Tighten cascade stem-routing in `core/separator.py` once drumsep is verified.
 
 ## Soon
 - Own the inference progress bar instead of letting audio-separator's raw tqdm

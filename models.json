@@ -4,8 +4,7 @@
   "category_defaults": {
     "roformer": "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
     "rhythm":   "htdemucs.yaml",
-    "extra":    "htdemucs_6s.yaml",
-    "kit":      "drumsep.th"
+    "extra":    "htdemucs_6s.yaml"
   },
 
   "names": {

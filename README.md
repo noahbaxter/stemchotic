@@ -15,8 +15,9 @@ Demucs, and the BS-RoFormer family.
 Working for single-model stems. The picker, live plan text, single-stem and
 multi-stem (filtered) output, vocals/instrumental routing to RoFormer, output
 next to the input, and silenced logging are all verified on real files. The
-drum-kit cascade (drums -> kick/snare/toms/cymbals via drumsep) is wired but the
-drumsep checkpoint load is not yet verified.
+drum-kit cascade (drums via HTDemucs, then split into kit pieces via MDX23C
+DrumSep) is verified end to end on real audio, in both 4-piece and 6-piece
+form and in WAV and FLAC output.
 
 ## Install
 
@@ -66,7 +67,8 @@ persists for the whole session.
 | `instrumental` | Instrumental | BS-RoFormer |
 | `band` | Drums, Bass, Vocals, Guitar, Piano, Other | HTDemucs 6-stem (vocals routed to RoFormer) |
 | `drums` | Drums | single file |
-| `kit` | Kick, Snare, Toms, Cymbals | experimental drumsep cascade |
+| `kit` | Kick, Snare, Toms, HH, Ride, Crash | MDX23C DrumSep cascade (6 piece) |
+| `kit4` | Kick, Snare, Toms, Cymbals | same cascade, cymbals summed (4 piece) |
 | `bass` | Bass | single file |
 
 ## Credits
