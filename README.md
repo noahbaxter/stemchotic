@@ -86,27 +86,51 @@ python stemchotic.py --list
 
 Output files are written **next to the input file**.
 
-In the picker, each stem you highlight implies its model, and the line under the
-box shows the exact plan (which model(s), how many passes, single-stem vs
-filtered). Pick exactly one stem and it optimises for that one file; pick vocals
-or instrumental and it routes to the dedicated BS-RoFormer model. The drum-kit
-pieces (kick/snare/toms/cymbals) are nested under Drums. "Advanced" lets you set
-the output format or browse all ~160 models (filter by typing `/`, each tagged
-with its architecture and best stem) and force one directly. Your selection
-persists for the whole session.
+## Interface
+
+The TUI is two panes. **Tab** switches focus between **Stem Selection** (left:
+the seven instrument stems plus a Residual toggle) and **Settings** (right). Each
+highlighted stem shows the model it resolves to, and the line under the box is the
+live plan. **M** opens the Models screen (Targets | Models), **S** opens the drum
+split. Settings cover **Quality** (Best / Fast), **Scope** (My picks / Everything
+the models make), **Drum kit** (Split off/4/5/6, Source song/stem), and output
+format. Your selection persists for the whole session.
 
 ## Presets (CLI shortcuts)
 
-| Key | Stems | Notes |
-|---|---|---|
-| `vocals` | Vocals, Instrumental | BS-RoFormer |
-| `instrumental` | Instrumental | BS-RoFormer |
-| `band` | Drums, Bass, Vocals, Guitar, Piano, Other | Drums/Bass via HTDemucs, Guitar/Piano/Other via BS-Roformer-SW, vocals routed to RoFormer |
-| `drums` | Drums | single file |
-| `kit` | Kick, Snare, Toms, HH, Cymbals | jarredou DrumSep 5-stem cascade (5 piece) |
-| `kit4` | Kick, Snare, Toms, Cymbals | same 5-stem cascade, hh summed into cymbals (4 piece) |
-| `kit6` | Kick, Snare, Toms, HH, Ride, Crash | MDX23C DrumSep 6-stem cascade (6 piece) |
-| `bass` | Bass | single file |
+| Key | Does |
+|---|---|
+| `vocals` | Vocals + Instrumental (BS-RoFormer) |
+| `instrumental` | Instrumental only |
+| `band` | Drums, Bass, Vocals, Guitar, Piano, Other (Drums/Bass via HTDemucs, others via BS-Roformer-SW, vocals via RoFormer) |
+| `drums` | Drums, single file |
+| `bass` | Bass, single file |
+| `kit` | Drums + 5-piece DrumSep cascade (kick/snare/toms/hh/cymbals) |
+| `kit4` | Drums + 4-piece cascade (hh merged into cymbals) |
+| `kit6` | Drums + 6-piece cascade (kick/snare/toms/hh/ride/crash) |
+| `kitsplit` | Input is already a drum stem: DrumSep it directly, no extraction |
+
+## Headless / CLI
+
+Any preset config can be overridden with flags, or you can skip presets entirely
+and drive it with `--stems`:
+
+| Flag | What it does |
+|---|---|
+| `--stems S1,S2,...` | Explicit selection (Vocals/Instrumental/Drums/Bass/Guitar/Piano/Other); overrides the preset |
+| `--quality best\|fast` | Model tier (default best) |
+| `--format wav\|flac\|mp3` | Output format (default wav) |
+| `--all` | Keep everything the models make (forces residual off) |
+| `--residual` | Also write `[Residual]` = mix minus your picks |
+| `--split off\|4\|5\|6` | Drum-kit split |
+| `--source song\|stem` | Treat the input as a full song or an existing drum stem |
+| `-y`, `--yes` | Skip per-model download prompts |
+
+```sh
+python stemchotic.py band song.wav --quality fast
+python stemchotic.py song.wav --stems Vocals --residual
+python stemchotic.py kitsplit drums.wav        # input is already a drum stem
+```
 
 ## Credits
 

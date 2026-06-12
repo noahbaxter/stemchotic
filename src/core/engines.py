@@ -52,13 +52,19 @@ _NAME_TO_ENGINE = {s.name: s.engine for s in STEM_OPTIONS}
 _STEM_MODEL = {s.name: s.model for s in STEM_OPTIONS if s.model}
 
 
-# CLI shortcuts -> default stem selections. (Kit presets are re-added in Task 6.)
+# CLI shortcuts -> a run-config dict. A preset may set any of: selected,
+# kit_split, kit_source; missing keys take their do_run defaults. Kit presets set
+# the drum-kit config rather than just a selection.
 CLI_PRESETS = {
-    "vocals": ["Vocals", "Instrumental"],
-    "instrumental": ["Instrumental"],
-    "band": ["Drums", "Bass", "Vocals", "Guitar", "Piano", "Other"],
-    "drums": ["Drums"],
-    "bass": ["Bass"],
+    "vocals":       {"selected": ["Vocals", "Instrumental"]},
+    "instrumental": {"selected": ["Instrumental"]},
+    "band":         {"selected": ["Drums", "Bass", "Vocals", "Guitar", "Piano", "Other"]},
+    "drums":        {"selected": ["Drums"]},
+    "bass":         {"selected": ["Bass"]},
+    "kit":          {"selected": ["Drums"], "kit_split": "5"},
+    "kit4":         {"selected": ["Drums"], "kit_split": "4"},
+    "kit6":         {"selected": ["Drums"], "kit_split": "6"},
+    "kitsplit":     {"selected": [], "kit_split": "5", "kit_source": "stem"},
 }
 
 
