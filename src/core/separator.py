@@ -153,21 +153,27 @@ def run(
     total = len(passes)
     for i, p in enumerate(passes, 1):
         if p.cascade_drums:
-            progress(f"[{i}/{total}] Extracting drums ({rhythm_model})...")
-            drums = _separate(
-                _make_separator(out_dir, single_stem="Drums"),
-                rhythm_model, input_file,
-            )
-            drums_path = drums[0]
+            # Reuse a [Drums] stem already produced this run (rhythm pass)
+            # instead of extracting drums a second time.
+            drums_path = next((r for r in results if Path(r).stem.endswith("[Drums]")), None)
+            reused = drums_path is not None
+            if not reused:
+                progress(f"[{i}/{total}] Extracting drums ({rhythm_model})...")
+                drums = _separate(
+                    _make_separator(out_dir, single_stem="Drums"),
+                    rhythm_model, input_file,
+                )
+                drums_path = drums[0]
             progress(f"[{i}/{total}] Splitting kit ({p.model})...")
             outs = _separate(
                 _make_separator(out_dir, output_format=output_format),
                 p.model, drums_path, _names(base, p.pieces or []),
             )
-            try:
-                os.remove(drums_path)      # drop the intermediate drums stem
-            except OSError:
-                pass
+            if not reused:
+                try:
+                    os.remove(drums_path)  # drop the intermediate drums stem
+                except OSError:
+                    pass
             results += _merge_pieces(outs, p.merge, base, output_format) if p.merge else outs
         else:
             label = p.single_stem or ", ".join(p.stems) or p.model
