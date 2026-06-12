@@ -33,7 +33,6 @@ TARGETS = [
     ("Guitar / Piano / Other", "guitar", "extra"),
 ]
 
-_TOP_N = 12
 _CATALOG = None
 
 
@@ -92,7 +91,6 @@ def _models_for(rows, cstem, engine, current):
 
     ranked = [fn for fn in sdr_of if fn not in pinned_fns]
     ranked.sort(key=lambda fn: sdr_of[fn] if sdr_of[fn] is not None else -1, reverse=True)
-    ranked = ranked[:_TOP_N]
 
     def entry(fn, pinned):
         return {
