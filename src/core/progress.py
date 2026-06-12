@@ -35,13 +35,25 @@ class capture_tqdm:
         return self
 
     def __exit__(self, *exc):
+        # Each step guarded separately: a failed close must never leave the
+        # write end open (reader would hang) or fd 2 unrestored (errors after
+        # this point must reach the real stderr).
         try:
             os.dup2(self._saved, 2)            # restore real stderr first
         finally:
-            os.close(self._saved)
-            os.close(self._write_fd)           # last write end -> reader sees EOF
-            self._thread.join(timeout=5)
-            os.close(self._read_fd)
+            try:
+                os.close(self._write_fd)       # EOF -> reader exits
+            except OSError:
+                pass
+            self._thread.join(timeout=1)       # short: Ctrl-C shouldn't lag
+            try:
+                os.close(self._read_fd)
+            except OSError:
+                pass
+            try:
+                os.close(self._saved)
+            except OSError:
+                pass
             if self._rendered:
                 sys.stdout.write("\r" + " " * 70 + "\r")
                 sys.stdout.flush()
