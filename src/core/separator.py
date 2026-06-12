@@ -40,6 +40,32 @@ def _noop(_msg: str) -> None:
     pass
 
 
+def _device_label() -> str:
+    """What audio-separator will actually run on, so GPU use is visible (we
+    silence audio-separator's own device logs). Mirrors its detection order:
+    CUDA, then Apple MPS, else CPU."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            try:
+                name = torch.cuda.get_device_name(0)
+            except Exception:
+                name = "CUDA"
+            ort_gpu = ""
+            try:
+                import onnxruntime as ort
+                if "CUDAExecutionProvider" not in ort.get_available_providers():
+                    ort_gpu = "  (note: onnxruntime is CPU-only; .onnx models run on CPU)"
+            except Exception:
+                pass
+            return f"NVIDIA GPU - {name}{ort_gpu}"
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return "Apple GPU (MPS)"
+    except Exception:
+        pass
+    return "CPU (no GPU acceleration detected)"
+
+
 def model_dir() -> str | None:
     """Pinned model cache when launched via the launcher (STEMCHOTIC_ROOT set),
     else None -> audio-separator's default cache (dev runs)."""
@@ -227,6 +253,8 @@ def run(
         if entry:   # skips files already present
             os.makedirs(models_dir(), exist_ok=True)
             download_custom(entry, models_dir(), progress)
+
+    progress(f"Compute device: {_device_label()}")
 
     results: list[str] = []
     whole_stem_paths: list[str] = []   # non-kit pass outputs, for the residual
