@@ -13,7 +13,7 @@ Enter sets the focused model for that target. Picks write into the picker state
 import re
 import sys
 
-from chotic_ui import Colors, getch, print_header, strip_ansi
+from chotic_ui import Colors, getch, print_header, visible_len, pad_to
 from chotic_ui.primitives import cbreak_noecho, KEY_UP, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_TAB, KEY_BACKSPACE, KEY_SPACE
 from chotic_ui.components import box_row, BOX_TL, BOX_TR, BOX_BL, BOX_BR, BOX_H, BOX_V, BOX_TL_DIV, BOX_TR_DIV
 from ..core.engines import CONFIG, ENGINE_MODEL, MODEL_SHORT, _NAME_TO_ENGINE, short_name, weight_tier
@@ -109,27 +109,6 @@ def _models_for(rows, cstem, engine, current):
 
 # --- rendering ---
 
-def _vis(text):
-    return len(strip_ansi(text))
-
-
-def _fit(text, width):
-    """Truncate to `width` visible chars (ANSI-aware), then pad to width."""
-    if _vis(text) > width:
-        out, seen, i = [], 0, 0
-        while i < len(text) and seen < width - 1:
-            if text[i] == "\x1b":
-                j = text.index("m", i) + 1
-                out.append(text[i:j])
-                i = j
-                continue
-            out.append(text[i])
-            seen += 1
-            i += 1
-        text = "".join(out) + "…"
-    return text + " " * (width - _vis(text))
-
-
 def _entry_label(e, width, focused_cursor):
     mark = f"{Colors.SUCCESS}●{Colors.RESET}" if e["current"] else (
         f"{Colors.PRIMARY}▸{Colors.RESET}" if focused_cursor else " ")
@@ -142,7 +121,7 @@ def _entry_label(e, width, focused_cursor):
     head = f"{mark} {Colors.PRIMARY}{sdr_s}{Colors.RESET} {tier_s} {name_c}{name}{Colors.RESET}"
     if e["note"]:
         head += f"   {Colors.MUTED}{e['note']}{Colors.RESET}"
-    return _fit(head, width)
+    return pad_to(head, width)
 
 
 def _frame(target_idx, entries, cursor, scroll, query, focus, cur_fn, term):
@@ -155,11 +134,11 @@ def _frame(target_idx, entries, cursor, scroll, query, focus, cur_fn, term):
     lines = [box_row(BOX_TL, BOX_H, BOX_TR, w, c)]
 
     def row(content):
-        pad = inner - _vis(content)
+        pad = inner - visible_len(content)
         lines.append(f"{c}{BOX_V}{Colors.RESET} {content}{' ' * max(0, pad)} {c}{BOX_V}{Colors.RESET}")
 
     def two(left, right):
-        row(f"{_fit(left, left_w)} {Colors.DIM}{BOX_V}{Colors.RESET} {_fit(right, right_w)}")
+        row(f"{pad_to(left, left_w)} {Colors.DIM}{BOX_V}{Colors.RESET} {pad_to(right, right_w)}")
 
     row(f"{Colors.BOLD}Choose models{Colors.RESET}")
     lines.append(box_row(BOX_TL_DIV, BOX_H, BOX_TR_DIV, w, c))
@@ -168,7 +147,7 @@ def _frame(target_idx, entries, cursor, scroll, query, focus, cur_fn, term):
     filt = f"{Colors.PRIMARY}Filter:{Colors.RESET} {query}{Colors.PRIMARY}▌{Colors.RESET}" if focus == "right" \
         else f"{Colors.MUTED}(type to filter){Colors.RESET}"
     count = f"{Colors.MUTED}{n}{Colors.RESET}"
-    pad = right_w - _vis(filt) - _vis(count)
+    pad = right_w - visible_len(filt) - visible_len(count)
     two(f"{Colors.BOLD}Target{Colors.RESET}", f"{filt}{' ' * max(1, pad)}{count}")
     lines.append(box_row(BOX_TL_DIV, BOX_H, BOX_TR_DIV, w, c))
 
