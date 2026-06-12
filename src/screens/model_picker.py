@@ -2,7 +2,7 @@
 Model overlay - a two-pane picker for which model each stem type uses.
 
 Opened with Tab from the stem picker. Left pane is the target (Vocals,
-Instrumental, Drums, Bass, Guitar/Piano/Other); the right pane lists every model
+Instrumental, Drums, Bass, Other); the right pane lists every model
 that can produce that target, our curated picks pinned at the top with a short
 "why", then the rest of the catalogue ranked by that stem's SDR. Tab switches
 panes, the cursor moves within the focused pane, typing filters the right pane,
@@ -31,7 +31,7 @@ TARGETS = [
     ("Instrumental", "instrumental", "roformer"),
     ("Drums", "drums", "rhythm"),
     ("Bass", "bass", "rhythm"),
-    ("Guitar / Piano / Other", "guitar", "extra"),
+    ("Other", "guitar", "extra"),   # one 6-stem model; governs guitar/piano/other
 ]
 
 _CATALOG = None
