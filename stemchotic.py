@@ -44,8 +44,8 @@ def list_presets():
 
 
 def do_run(selected, input_file, output_format="WAV", models=None, one_pass=None,
-           assume_yes=False, quality=DEFAULT_QUALITY):
-    print(f"\n  Plan: {plan_text(selected, models, one_pass, quality)}")
+           assume_yes=False, quality=DEFAULT_QUALITY, keep_all=False):
+    print(f"\n  Plan: {plan_text(selected, models, one_pass, quality, keep_all)}")
     print(f"  Output -> next to {input_file}\n")
     passes = resolve(selected, models, one_pass, quality)
     rhythm = category_model("rhythm", quality, models)
@@ -59,7 +59,7 @@ def do_run(selected, input_file, output_format="WAV", models=None, one_pass=None
             output_format=output_format,
             models=models, one_pass=one_pass,
             progress=lambda m: print(f"  {m}"),
-            quality=quality,
+            quality=quality, keep_all=keep_all,
         )
     except Exception as e:
         print(f"\n  Error: {e}")
@@ -97,6 +97,7 @@ def run_tui():
             output_format=choice["output_format"],
             models=choice.get("models"), one_pass=choice.get("one_pass"),
             quality=choice.get("quality", DEFAULT_QUALITY),
+            keep_all=choice.get("keep_all", False),
         )
         try:
             input_with_esc("\n  Press Enter to return to the picker... ")

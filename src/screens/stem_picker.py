@@ -20,9 +20,11 @@ ACTION_SEPARATE = ("action", "separate")
 ACTION_FORMAT = ("action", "format")
 ACTION_MODEL = ("action", "model")
 ACTION_QUALITY = ("action", "quality")
+ACTION_SCOPE = ("action", "scope")
 FORMATS = ["WAV", "FLAC", "MP3"]
 QUALITIES = ["best", "fast"]
 _QUALITY_LABEL = {"best": "Best", "fast": "Fast"}
+_SCOPE_LABEL = {False: "My picks", True: "Everything the models make"}
 
 
 def _layout():
@@ -44,7 +46,7 @@ def _layout():
 def new_state() -> dict:
     """Fresh, session-long picker state."""
     return {"selected": set(), "output_format": "WAV", "idx": 0, "models": {},
-            "one_pass": None, "quality": DEFAULT_QUALITY}
+            "one_pass": None, "quality": DEFAULT_QUALITY, "keep_all": False}
 
 
 def show_stem_picker(state: dict) -> dict | None:
@@ -58,6 +60,7 @@ def show_stem_picker(state: dict) -> dict | None:
         models = state.setdefault("models", {})
         one_pass = state.get("one_pass")
         quality = state.setdefault("quality", DEFAULT_QUALITY)
+        keep_all = state.setdefault("keep_all", False)
         menu = Menu(
             title="Pick your stems",
             subtitle="Space to pick stems  ·  Tab to choose models  ·  Start splitting to run",
@@ -88,6 +91,9 @@ def show_stem_picker(state: dict) -> dict | None:
                 label=f"{Colors.MUTED}Quality:{Colors.RESET} {_QUALITY_LABEL[quality]}  {Colors.DIM}(Enter cycles){Colors.RESET}",
                 value=ACTION_QUALITY, pinned=True))
             m.add_item(MenuItem(
+                label=f"{Colors.MUTED}Output:{Colors.RESET} {_SCOPE_LABEL[keep_all]}  {Colors.DIM}(Enter cycles){Colors.RESET}",
+                value=ACTION_SCOPE, pinned=True))
+            m.add_item(MenuItem(
                 label=f"{Colors.MUTED}Choose models{Colors.RESET}  {Colors.DIM}(Tab){Colors.RESET}",
                 hotkey="M", value=ACTION_MODEL, pinned=True))
             m.add_item(MenuDivider(pinned=True))
@@ -95,7 +101,7 @@ def show_stem_picker(state: dict) -> dict | None:
                 label=f"{Colors.PRIMARY}Start splitting{Colors.RESET}  {Colors.DIM}→ choose audio file{Colors.RESET}",
                 value=ACTION_SEPARATE, pinned=True))
 
-            m.status_line = (f"{plan_text(list(selected), models, one_pass, quality)}"
+            m.status_line = (f"{plan_text(list(selected), models, one_pass, quality, keep_all)}"
                              f"    |    format: {output_format}  ·  quality: {_QUALITY_LABEL[quality]}")
 
         menu.rebuild = build
@@ -129,12 +135,16 @@ def show_stem_picker(state: dict) -> dict | None:
             state["quality"] = QUALITIES[(i + 1) % len(QUALITIES)]
             continue
 
+        if val == ACTION_SCOPE:
+            state["keep_all"] = not keep_all
+            continue
+
         if val == ACTION_SEPARATE:
             if not selected:
                 continue
             return {"selected": list(selected), "output_format": output_format,
                     "models": dict(models), "one_pass": state.get("one_pass"),
-                    "quality": quality}
+                    "quality": quality, "keep_all": keep_all}
 
         if isinstance(val, tuple) and val[0] == "stem":
             # Enter and Space both just toggle; splitting only starts via Start splitting.

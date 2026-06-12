@@ -9,6 +9,7 @@ our own step messages through the `progress` callback instead.
 
 import logging
 import os
+import re
 from pathlib import Path
 
 from .engines import Pass, resolve, short_name, category_model, DEFAULT_QUALITY
@@ -94,6 +95,26 @@ def _separate(separator, model: str, input_file: str, names: dict | None = None,
     return [n if os.path.isabs(n) else os.path.join(separator.output_dir, n) for n in out]
 
 
+_DEFAULT_STEM = re.compile(r"_\(([^)]+)\)_")   # audio-separator's "base_(stem)_model" pattern
+
+
+def _rename_all(paths: list[str], base: str, model: str, tag_model: bool) -> list[str]:
+    """Rename every stem a model emitted to '<base> [Stem]', tagging the model
+    name when more than one model runs so same-named stems can't collide."""
+    kept = []
+    for path in paths:
+        m = _DEFAULT_STEM.search(Path(path).name)
+        stem = m.group(1) if m else Path(path).stem
+        label = f"{base} [{_pretty(stem)}]"
+        if tag_model:
+            label += f" ({short_name(model)})"
+        new = os.path.join(os.path.dirname(path), label + Path(path).suffix)
+        if os.path.abspath(new) != os.path.abspath(path):
+            os.replace(path, new)
+        kept.append(new)
+    return kept
+
+
 def _filter_to(paths: list[str], keep: list[str]) -> list[str]:
     """Keep only output files matching the wanted stem names; delete the rest."""
     keep_l = [k.lower() for k in keep]
@@ -153,13 +174,15 @@ def run(
     one_pass: str | None = None,
     progress=_noop,
     quality: str = DEFAULT_QUALITY,
+    keep_all: bool = False,
 ) -> list[str]:
     """
     Separate `input_file` according to the selected stems. Output files are
     written to the SAME directory as the input. Returns the kept output paths.
 
     `models`: per-category model overrides. `one_pass`: run a single model for the
-    whole selection (filtered to the selected stems).
+    whole selection. `keep_all`: keep every stem each model emits instead of
+    trimming to the selection (the "everything the models make" output mode).
     """
     input_file = os.path.abspath(input_file)
     if not os.path.isfile(input_file):
@@ -214,14 +237,22 @@ def run(
         else:
             label = p.single_stem or ", ".join(p.stems) or short_name(p.model)
             progress(f"[{i}/{total}] {short_name(p.model)} -> {label} (this is the slow part)...")
-            keep = [p.single_stem] if p.single_stem else p.stems
-            sep = _make_separator(out_dir, single_stem=p.single_stem, output_format=output_format)
-            outs = _separate(sep, p.model, input_file, _names(base, keep),
-                             label=f"[{i}/{total}] {short_name(p.model)} -> {label}")
-            # Multi-stem models (roformer/MDXC) ignore output_single_stem and emit
-            # every stem, so always filter to what was asked and delete the rest
-            # (this also drops the ugly default-named extras SW would leave behind).
-            results += _filter_to(outs, keep) if keep else outs
+            if keep_all:
+                # Keep every stem the model emits, named "<base> [Stem]" (model-
+                # tagged when more than one model runs, so stems can't collide).
+                sep = _make_separator(out_dir, output_format=output_format)
+                outs = _separate(sep, p.model, input_file,
+                                 label=f"[{i}/{total}] {short_name(p.model)} -> all stems")
+                results += _rename_all(outs, base, p.model, tag_model=total > 1)
+            else:
+                keep = [p.single_stem] if p.single_stem else p.stems
+                sep = _make_separator(out_dir, single_stem=p.single_stem, output_format=output_format)
+                outs = _separate(sep, p.model, input_file, _names(base, keep),
+                                 label=f"[{i}/{total}] {short_name(p.model)} -> {label}")
+                # Multi-stem models (roformer/MDXC) ignore output_single_stem and
+                # emit every stem, so always filter to the ask and delete the rest
+                # (also drops the ugly default-named extras SW would leave behind).
+                results += _filter_to(outs, keep) if keep else outs
 
     progress("Done.")
     return results

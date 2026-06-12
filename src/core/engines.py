@@ -183,19 +183,23 @@ def resolve(selected: list[str], models: dict | None = None, one_pass: str | Non
 
 
 def plan_text(selected: list[str], models: dict | None = None, one_pass: str | None = None,
-              quality: str = DEFAULT_QUALITY) -> str:
-    """One-line description of what the current selection will run."""
+              quality: str = DEFAULT_QUALITY, keep_all: bool = False) -> str:
+    """One-line description of what the current selection will run. `keep_all`
+    keeps every stem each model emits instead of trimming to the selection."""
     if not selected:
         return "Nothing selected - pick stems with Space, then Start splitting."
 
     if one_pass:
-        return f"1 pass: {short_name(one_pass)} -> {', '.join(selected)} (one model)"
+        out = "all its stems" if keep_all else ", ".join(selected)
+        return f"1 pass: {short_name(one_pass)} -> {out} (one model)"
 
     parts = []
     for p in resolve(selected, models, quality=quality):
         label = short_name(p.model)
         if p.cascade_drums:
             parts.append(f"drums -> {label} (full kit)")
+        elif keep_all:
+            parts.append(f"{label} -> all its stems")
         elif p.single_stem:
             parts.append(f"{label} -> {p.single_stem} only")
         else:
