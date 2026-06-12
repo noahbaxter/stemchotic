@@ -17,6 +17,14 @@
     "MDX23C-DrumSep-aufr33-jarredou.ckpt": "DrumSep"
   },
 
+  "_sizes_comment": "Download size in MB for the consent prompt (measured via HEAD). Models not listed fall back to a live HEAD request (single files) or 'size unknown' (demucs yaml bundles).",
+  "sizes_mb": {
+    "model_bs_roformer_ep_317_sdr_12.9755.ckpt": 610,
+    "htdemucs.yaml": 80,
+    "htdemucs_6s.yaml": 52,
+    "MDX23C-DrumSep-aufr33-jarredou.ckpt": 417
+  },
+
   "_kit_comment": "Drum-kit splitters: cascade (extract drums, then split). Both use the 6-piece catalogue model; the 4-piece groups hh/ride/crash into Cymbals afterward.",
   "kit_models": [
     {"name": "4 piece (Kick/Snare/Toms/Cymbals)", "model": "MDX23C-DrumSep-aufr33-jarredou.ckpt",

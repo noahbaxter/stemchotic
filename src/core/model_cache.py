@@ -9,14 +9,20 @@ import sys
 import urllib.request
 
 from .separator import model_dir
-from .engines import Pass, short_name
+from .engines import CONFIG, Pass, short_name
 
 # audio-separator 0.44.2's built-in default model_file_dir.
 _DEFAULT_CACHE = "/tmp/audio-separator-models"
 
-# Single-file models in the public UVR repo. Demucs yaml bundles resolve their
-# weight URLs through a network-fetched registry, so those stay unknown.
-_PUBLIC_REPO = "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models"
+# Single-file models download from the public UVR repo, falling back to the
+# audio-separator releases (mirrors audio-separator's own fallback order).
+# Demucs yaml bundles resolve their weight URLs through a network-fetched
+# registry; their sizes come from models.json "sizes_mb" instead.
+_REPOS = (
+    "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models",
+    "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs",
+)
+_SIZES_MB = CONFIG.get("sizes_mb", {})
 
 
 def _cache_dir() -> str | None:
@@ -59,25 +65,28 @@ def is_cached(model_filename: str) -> bool:
     return all(_glob.glob(os.path.join(d, f"{tok}*.th")) for tok in tokens)
 
 
-def _download_url(model_filename: str) -> str | None:
-    """Cheap URL guess for single-file models; None means size unknown."""
-    if model_filename.endswith((".ckpt", ".onnx", ".pth", ".th")):
-        return f"{_PUBLIC_REPO}/{model_filename}"
-    return None
-
-
-def _size_of(model_filename: str) -> int | None:
-    """Best-effort size in bytes via HEAD on the resolved download URL."""
+def _head_size(url: str) -> int | None:
     try:
-        url = _download_url(model_filename)
-        if not url:
-            return None
         req = urllib.request.Request(url, method="HEAD")
         with urllib.request.urlopen(req, timeout=5) as resp:
             n = resp.headers.get("Content-Length")
             return int(n) if n else None
     except Exception:
         return None
+
+
+def _size_of(model_filename: str) -> int | None:
+    """Best-effort size in bytes: models.json sizes_mb first (no network),
+    then HEAD requests for single-file models."""
+    mb = _SIZES_MB.get(model_filename)
+    if mb:
+        return int(mb * 1024 * 1024)
+    if model_filename.endswith((".ckpt", ".onnx", ".pth", ".th")):
+        for repo in _REPOS:
+            n = _head_size(f"{repo}/{model_filename}")
+            if n and n > 1024 * 1024:   # tiny responses are 404 pages, not models
+                return n
+    return None
 
 
 def missing_models(passes: list[Pass], rhythm_model: str) -> list[tuple[str, int | None]]:
