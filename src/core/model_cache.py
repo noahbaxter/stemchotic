@@ -8,11 +8,8 @@ import os
 import sys
 import urllib.request
 
-from .separator import model_dir
+from .separator import model_dir, DEFAULT_CACHE as _DEFAULT_CACHE
 from .engines import CONFIG, Pass, short_name
-
-# audio-separator 0.44.2's built-in default model_file_dir.
-_DEFAULT_CACHE = "/tmp/audio-separator-models"
 
 # Single-file models download from the public UVR repo, falling back to the
 # audio-separator releases (mirrors audio-separator's own fallback order).
@@ -22,7 +19,9 @@ _REPOS = (
     "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models",
     "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs",
 )
-_SIZES_MB = CONFIG.get("sizes_mb", {})
+# Custom models (registry overlay) carry their measured size in their entry.
+_SIZES_MB = {**CONFIG.get("sizes_mb", {}),
+             **{m["filename"]: m["size_mb"] for m in CONFIG.get("custom_models", [])}}
 
 
 def _cache_dir() -> str | None:

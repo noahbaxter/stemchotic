@@ -25,6 +25,26 @@
     "MDX23C-DrumSep-aufr33-jarredou.ckpt": 417
   },
 
+  "_custom_comment": "Public-weight models missing from the UVR catalogue. src/core/registry.py merges them into download_checks.json and downloads the files itself (jarredou's original repos are gone; these are mirrors). 'config' is the LOCAL filename the config is saved as; the SW one must contain 'roformer' or audio-separator loads it with the wrong arch.",
+  "custom_models": [
+    {"filename": "drumsep_5stems_mdx23c_jarredou.ckpt",
+     "config": "config_drumsep5_mdx23c.yaml",
+     "group": "mdx23c_download_list",
+     "entry_name": "MDX23C Model: DrumSep 5-stem by jarredou",
+     "urls": {
+       "ckpt": "https://media.githubusercontent.com/media/EverlastEngineering/DrumToMIDI/main/mdx_models/drumsep_5stems_mdx23c_jarredou.ckpt",
+       "config": "https://raw.githubusercontent.com/EverlastEngineering/DrumToMIDI/main/mdx_models/config_mdx23c.yaml"},
+     "size_mb": 417},
+    {"filename": "BS-Rofo-SW-Fixed.ckpt",
+     "config": "BS-Roformer-SW-Fixed.yaml",
+     "group": "roformer_download_list",
+     "entry_name": "Roformer Model: BS-Roformer-SW by jarredou",
+     "urls": {
+       "ckpt": "https://huggingface.co/enerjazzer/BS-ROFO-SW-Fixed/resolve/main/BS-Rofo-SW-Fixed.ckpt",
+       "config": "https://huggingface.co/enerjazzer/BS-ROFO-SW-Fixed/resolve/main/BS-Rofo-SW-Fixed.yaml"},
+     "size_mb": 667}
+  ],
+
   "_kit_comment": "Drum-kit splitters: cascade (extract drums, then split). Both use the 6-piece catalogue model; the 4-piece groups hh/ride/crash into Cymbals afterward.",
   "kit_models": [
     {"name": "4 piece (Kick/Snare/Toms/Cymbals)", "model": "MDX23C-DrumSep-aufr33-jarredou.ckpt",

@@ -13,6 +13,10 @@ from pathlib import Path
 
 from .engines import Pass, resolve, short_name, ENGINE_MODEL
 from .progress import capture_tqdm
+from .registry import CUSTOM_MODELS, download_custom, ensure_registry
+
+# audio-separator 0.44.2's built-in default model_file_dir (dev runs).
+DEFAULT_CACHE = "/tmp/audio-separator-models"
 
 
 def _pretty(stem: str) -> str:
@@ -42,6 +46,12 @@ def model_dir() -> str | None:
     return os.path.join(root, ".stemchotic", "models") if root else None
 
 
+def models_dir() -> str:
+    """The directory the Separator will actually use: pinned dir or the
+    audio-separator default."""
+    return model_dir() or DEFAULT_CACHE
+
+
 def _make_separator(output_dir=None, single_stem=None, output_format="WAV"):
     """Construct a Separator with logging silenced and the model cache pinned
     under STEMCHOTIC_ROOT when launched via the launcher. Raises a friendly
@@ -55,8 +65,14 @@ def _make_separator(output_dir=None, single_stem=None, output_format="WAV"):
     kwargs = {}
     md = model_dir()
     if md:
-        os.makedirs(md, exist_ok=True)
         kwargs["model_file_dir"] = md
+    # Merge our custom models into the registry the Separator will read.
+    reg_dir = models_dir()
+    os.makedirs(reg_dir, exist_ok=True)
+    try:
+        ensure_registry(reg_dir)
+    except Exception:
+        pass   # offline with no registry on disk; catalogue models still work
     if output_dir is not None:
         kwargs["output_dir"] = output_dir
     return Separator(
@@ -153,6 +169,17 @@ def run(
 
     base = Path(input_file).stem
     rhythm_model = (models or {}).get("rhythm", ENGINE_MODEL["rhythm"])
+
+    # Custom models aren't in audio-separator's repos; fetch them ourselves.
+    needed = [p.model for p in passes]
+    if any(p.cascade_drums for p in passes):
+        needed.append(rhythm_model)
+    for m in dict.fromkeys(needed):
+        entry = CUSTOM_MODELS.get(m)
+        if entry:   # skips files already present
+            os.makedirs(models_dir(), exist_ok=True)
+            download_custom(entry, models_dir(), progress)
+
     results: list[str] = []
     total = len(passes)
     for i, p in enumerate(passes, 1):
