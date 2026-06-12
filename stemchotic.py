@@ -44,10 +44,11 @@ def list_presets():
 
 
 def do_run(selected, input_file, output_format="WAV", models=None, one_pass=None,
-           assume_yes=False, quality=DEFAULT_QUALITY, keep_all=False):
-    print(f"\n  Plan: {plan_text(selected, models, one_pass, quality, keep_all)}")
+           assume_yes=False, quality=DEFAULT_QUALITY, keep_all=False,
+           kit_split="off", kit_source="song", residual=False):
+    print(f"\n  Plan: {plan_text(selected, models, one_pass, quality, keep_all, kit_split, kit_source, residual)}")
     print(f"  Output -> next to {input_file}\n")
-    passes = resolve(selected, models, one_pass, quality)
+    passes = resolve(selected, models, one_pass, quality, kit_split, kit_source)
     rhythm = category_model("rhythm", quality, models)
     print("  Checking model cache...")
     if not confirm_downloads(missing_models(passes, rhythm), assume_yes):
@@ -60,6 +61,7 @@ def do_run(selected, input_file, output_format="WAV", models=None, one_pass=None
             models=models, one_pass=one_pass,
             progress=lambda m: print(f"  {m}"),
             quality=quality, keep_all=keep_all,
+            kit_split=kit_split, kit_source=kit_source, residual=residual,
         )
     except Exception as e:
         print(f"\n  Error: {e}")
@@ -98,6 +100,9 @@ def run_tui():
             models=choice.get("models"), one_pass=choice.get("one_pass"),
             quality=choice.get("quality", DEFAULT_QUALITY),
             keep_all=choice.get("keep_all", False),
+            kit_split=choice.get("kit_split", "off"),
+            kit_source=choice.get("kit_source", "song"),
+            residual=choice.get("residual", False),
         )
         try:
             input_with_esc("\n  Press Enter to return to the picker... ")

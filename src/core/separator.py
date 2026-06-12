@@ -166,6 +166,25 @@ def _merge_pieces(paths: list[str], merge: dict, base: str, output_format: str) 
     return kept
 
 
+def _residual(input_file, picked_paths, base, output_format):
+    """One file = the input mix minus the picked whole-stem outputs."""
+    import soundfile as sf, numpy as np
+    mix, sr = sf.read(input_file)
+    acc = np.zeros_like(mix)
+    for p in picked_paths:
+        a, _ = sf.read(p)
+        n = min(len(a), len(acc))
+        if a.ndim == mix.ndim:
+            acc[:n] += a[:n]
+        else:                                  # mono stem into stereo mix or vice versa
+            acc[:n] += a[:n, None] if mix.ndim == 2 else a[:n].mean(axis=1)[:n]
+    res = np.clip(mix - acc, -1.0, 1.0)
+    ext = output_format.lower()
+    out = os.path.join(os.path.dirname(os.path.abspath(input_file)), f"{base} [Residual].{ext}")
+    sf.write(out, res, sr)
+    return out
+
+
 def run(
     selected: list[str],
     input_file: str,
@@ -175,6 +194,9 @@ def run(
     progress=_noop,
     quality: str = DEFAULT_QUALITY,
     keep_all: bool = False,
+    kit_split: str = "off",
+    kit_source: str = "song",
+    residual: bool = False,
 ) -> list[str]:
     """
     Separate `input_file` according to the selected stems. Output files are
@@ -189,7 +211,7 @@ def run(
         raise RuntimeError(f"File not found: {input_file}")
     out_dir = os.path.dirname(input_file) or os.getcwd()
 
-    passes = resolve(selected, models, one_pass, quality)
+    passes = resolve(selected, models, one_pass, quality, kit_split=kit_split, kit_source=kit_source)
     if not passes:
         raise RuntimeError("Nothing selected.")
 
@@ -207,21 +229,25 @@ def run(
             download_custom(entry, models_dir(), progress)
 
     results: list[str] = []
+    whole_stem_paths: list[str] = []   # non-kit pass outputs, for the residual
     total = len(passes)
     for i, p in enumerate(passes, 1):
-        if p.cascade_drums:
-            # Reuse a [Drums] stem already produced this run (rhythm pass)
-            # instead of extracting drums a second time.
-            drums_path = next((r for r in results if Path(r).stem.endswith("[Drums]")), None)
-            reused = drums_path is not None
-            if not reused:
-                progress(f"[{i}/{total}] Extracting drums ({short_name(rhythm_model)})...")
-                drums = _separate(
-                    _make_separator(out_dir, single_stem="Drums"),
-                    rhythm_model, input_file,
-                    label=f"[{i}/{total}] {short_name(rhythm_model)} -> Drums",
-                )
-                drums_path = drums[0]
+        if p.cascade_drums or p.direct_split:
+            if p.direct_split:
+                drums_path, reused = input_file, True   # the input file IS the drum stem
+            else:
+                # Reuse a [Drums] stem already produced this run (rhythm pass)
+                # instead of extracting drums a second time.
+                drums_path = next((r for r in results if Path(r).stem.endswith("[Drums]")), None)
+                reused = drums_path is not None
+                if not reused:
+                    progress(f"[{i}/{total}] Extracting drums ({short_name(rhythm_model)})...")
+                    drums = _separate(
+                        _make_separator(out_dir, single_stem="Drums"),
+                        rhythm_model, input_file,
+                        label=f"[{i}/{total}] {short_name(rhythm_model)} -> Drums",
+                    )
+                    drums_path = drums[0]
             progress(f"[{i}/{total}] Splitting kit ({short_name(p.model)})...")
             outs = _separate(
                 _make_separator(out_dir, output_format=output_format),
@@ -243,7 +269,7 @@ def run(
                 sep = _make_separator(out_dir, output_format=output_format)
                 outs = _separate(sep, p.model, input_file,
                                  label=f"[{i}/{total}] {short_name(p.model)} -> all stems")
-                results += _rename_all(outs, base, p.model, tag_model=total > 1)
+                kept = _rename_all(outs, base, p.model, tag_model=total > 1)
             else:
                 keep = [p.single_stem] if p.single_stem else p.stems
                 sep = _make_separator(out_dir, single_stem=p.single_stem, output_format=output_format)
@@ -252,7 +278,11 @@ def run(
                 # Multi-stem models (roformer/MDXC) ignore output_single_stem and
                 # emit every stem, so always filter to the ask and delete the rest
                 # (also drops the ugly default-named extras SW would leave behind).
-                results += _filter_to(outs, keep) if keep else outs
+                kept = _filter_to(outs, keep) if keep else outs
+            results += kept
+            whole_stem_paths += kept   # only non-kit passes feed the residual
 
+    if residual and not keep_all and whole_stem_paths:
+        results.append(_residual(input_file, whole_stem_paths, base, output_format))
     progress("Done.")
     return results
