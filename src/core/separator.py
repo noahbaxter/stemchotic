@@ -218,10 +218,10 @@ def run(
             sep = _make_separator(out_dir, single_stem=p.single_stem, output_format=output_format)
             outs = _separate(sep, p.model, input_file, _names(base, keep),
                              label=f"[{i}/{total}] {short_name(p.model)} -> {label}")
-            if p.single_stem or not p.stems:
-                results += outs            # already exactly what was asked
-            else:
-                results += _filter_to(outs, p.stems)
+            # Multi-stem models (roformer/MDXC) ignore output_single_stem and emit
+            # every stem, so always filter to what was asked and delete the rest
+            # (this also drops the ugly default-named extras SW would leave behind).
+            results += _filter_to(outs, keep) if keep else outs
 
     progress("Done.")
     return results
