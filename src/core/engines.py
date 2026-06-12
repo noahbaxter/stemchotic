@@ -22,6 +22,7 @@ MODEL_SHORT = CONFIG["names"]                # model filename -> friendly short 
 QUALITY_TIERS = CONFIG["quality_tiers"]      # quality -> {category: model filename}
 DEFAULT_QUALITY = CONFIG.get("default_quality", "best")
 MVSEP_SDR = CONFIG.get("mvsep_sdr", {})      # model filename -> {stem: mvsep sdr}
+KIT_LAYOUTS = CONFIG["kit_layouts"]          # piece count -> {model, pieces, merge}
 
 
 @dataclass(frozen=True)
@@ -34,8 +35,8 @@ class StemOption:
     merge: dict | None = None  # kit: group output pieces, e.g. {"Cymbals": ["hh","ride","crash"]}
 
 
-# Each stem belongs to one engine, so highlighting it picks the model. Kit options
-# (drumsep 4 / 6) come from models.json - each runs a whole-kit cascade.
+# Each stem belongs to one engine, so highlighting it picks the model. The drum
+# kit is run config (KIT_LAYOUTS), not a selectable stem.
 STEM_OPTIONS = [
     StemOption("Vocals", "roformer"),
     StemOption("Instrumental", "roformer"),
@@ -44,16 +45,13 @@ STEM_OPTIONS = [
     StemOption("Guitar", "extra"),
     StemOption("Piano", "extra"),
     StemOption("Other", "extra"),
-] + [StemOption(k["name"], "kit", experimental=True, model=k["model"],
-                pieces=tuple(k.get("pieces", [])), merge=k.get("merge"))
-     for k in CONFIG.get("kit_models", [])]
+]
 
 _NAME_TO_ENGINE = {s.name: s.engine for s in STEM_OPTIONS}
 _STEM_MODEL = {s.name: s.model for s in STEM_OPTIONS if s.model}
-_KIT_NAMES = [s.name for s in STEM_OPTIONS if s.engine == "kit"]
 
 
-# CLI shortcuts -> default stem selections.
+# CLI shortcuts -> default stem selections. (Kit presets are re-added in Task 6.)
 CLI_PRESETS = {
     "vocals": ["Vocals", "Instrumental"],
     "instrumental": ["Instrumental"],
@@ -61,19 +59,6 @@ CLI_PRESETS = {
     "drums": ["Drums"],
     "bass": ["Bass"],
 }
-if _KIT_NAMES:
-    # Map kit options by their OUTPUT piece count (merges collapse pieces).
-    _kit_by_count = {}
-    for _opt in STEM_OPTIONS:
-        if _opt.engine != "kit":
-            continue
-        _n = len(_opt.pieces or ()) - sum(len(v) - 1 for v in (_opt.merge or {}).values())
-        _kit_by_count.setdefault(_n, _opt.name)
-    CLI_PRESETS["kit"] = [_kit_by_count.get(5, _KIT_NAMES[0])]   # default kit = 5 piece
-    if 4 in _kit_by_count:
-        CLI_PRESETS["kit4"] = [_kit_by_count[4]]
-    if 6 in _kit_by_count:
-        CLI_PRESETS["kit6"] = [_kit_by_count[6]]
 
 
 def short_name(filename: str) -> str:
@@ -129,35 +114,40 @@ class Pass:
     stems: list[str]               # stems to keep from this engine
     single_stem: str | None = None  # exactly-one -> output_single_stem (one file)
     cascade_drums: bool = False     # kit: extract drums first, then drumsep
+    direct_split: bool = False      # kit: input IS the drum stem, drumsep it directly
     pieces: tuple | None = None     # kit: the drumsep model's output pieces
     merge: dict | None = None       # kit: group output pieces post-split
 
 
 def resolve(selected: list[str], models: dict | None = None, one_pass: str | None = None,
-            quality: str = DEFAULT_QUALITY) -> list[Pass]:
+            quality: str = DEFAULT_QUALITY, kit_split: str = "off",
+            kit_source: str = "song") -> list[Pass]:
     """Concrete passes for a selection.
 
     `models`: per-category model overrides {category: filename}.
     `one_pass`: a single model to run for the whole selection (cross-category),
     filtered to the selected stems.
     `quality`: session quality tier picking each category's model.
+    `kit_split`/`kit_source`: drum-kit run config. source=stem treats the input
+    as a drum stem and runs ONE direct DrumSep pass (the only pass). source=song
+    appends a cascade kit pass when split != "off" and Drums is selected.
 
     Non-kit passes that resolve to the SAME model file are merged into one pass
     (e.g. on Best, rhythm + extra both map to RoFormer SW -> a single pass).
     """
+    if kit_source == "stem":               # input is the drum stem: one direct pass
+        lay = KIT_LAYOUTS[kit_split if kit_split != "off" else "5"]
+        kmodel = (models or {}).get("kit", lay["model"])
+        return [Pass(engine="kit", model=kmodel, stems=[], cascade_drums=False,
+                     direct_split=True, pieces=tuple(lay["pieces"]), merge=lay.get("merge"))]
+
     if one_pass:
         single = selected[0] if len(selected) == 1 else None
         return [Pass(engine="custom", model=one_pass, stems=list(selected), single_stem=single)]
 
     by_engine: dict[str, list[str]] = {}
-    kit_passes: list[Pass] = []
     for opt in STEM_OPTIONS:               # stable, deterministic order
-        if opt.name not in selected:
-            continue
-        if opt.engine == "kit":            # each kit option = its own whole-kit cascade
-            kit_passes.append(Pass(engine="kit", model=opt.model, stems=[],
-                                   cascade_drums=True, pieces=opt.pieces, merge=opt.merge))
-        else:
+        if opt.name in selected:
             by_engine.setdefault(opt.engine, []).append(opt.name)
 
     passes: list[Pass] = []
@@ -179,24 +169,36 @@ def resolve(selected: list[str], models: dict | None = None, one_pass: str | Non
         p = merged[model]
         p.single_stem = p.stems[0] if len(p.stems) == 1 else None
         out.append(p)
-    return out + kit_passes
+
+    if kit_split != "off" and "Drums" in selected:
+        lay = KIT_LAYOUTS[kit_split]
+        kmodel = (models or {}).get("kit", lay["model"])
+        out = out + [Pass(engine="kit", model=kmodel, stems=[], cascade_drums=True,
+                          pieces=tuple(lay["pieces"]), merge=lay.get("merge"))]
+    return out
 
 
 def plan_text(selected: list[str], models: dict | None = None, one_pass: str | None = None,
-              quality: str = DEFAULT_QUALITY, keep_all: bool = False) -> str:
+              quality: str = DEFAULT_QUALITY, keep_all: bool = False,
+              kit_split: str = "off", kit_source: str = "song", residual: bool = False) -> str:
     """One-line description of what the current selection will run. `keep_all`
     keeps every stem each model emits instead of trimming to the selection."""
-    if not selected:
+    if not selected and kit_source != "stem":
         return "Nothing selected - pick stems with Space, then Start splitting."
 
     if one_pass:
         out = "all its stems" if keep_all else ", ".join(selected)
-        return f"1 pass: {short_name(one_pass)} -> {out} (one model)"
+        line = f"1 pass: {short_name(one_pass)} -> {out} (one model)"
+        if residual and not keep_all:
+            line += "  ·  + Residual (mix - picks)"
+        return line
 
     parts = []
-    for p in resolve(selected, models, quality=quality):
+    for p in resolve(selected, models, quality=quality, kit_split=kit_split, kit_source=kit_source):
         label = short_name(p.model)
-        if p.cascade_drums:
+        if p.direct_split:
+            parts.append(f"{label} on drum stem (full kit)")
+        elif p.cascade_drums:
             parts.append(f"drums -> {label} (full kit)")
         elif keep_all:
             parts.append(f"{label} -> all its stems")
@@ -205,4 +207,7 @@ def plan_text(selected: list[str], models: dict | None = None, one_pass: str | N
         else:
             parts.append(f"{label} -> {', '.join(p.stems)}")
     n = len(parts)
-    return f"{n} pass{'es' if n > 1 else ''}: " + "  ·  ".join(parts)
+    line = f"{n} pass{'es' if n > 1 else ''}: " + "  ·  ".join(parts)
+    if residual and not keep_all:
+        line += "  ·  + Residual (mix - picks)"
+    return line

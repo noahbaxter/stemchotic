@@ -1,14 +1,29 @@
 {
-  "_comment": "Editable stemchotic defaults. SDR rankings + the model list come live from audio-separator; this file is just the picks/labels. Update as new models appear.",
+  "_comment": "Editable stemchotic config. The model list + catalogue SDR come live from audio-separator; this file holds the picks/labels/quality tiers and the MVSep-sourced scores for the curated models.",
 
+  "_tiers_comment": "Per-category model for each quality tier. Fast = quick/light, Best = top quality (slower). resolve() merges passes that share a model, so on Best the band's drums/bass/guitar/piano/other all come from one RoFormer SW pass. category_defaults is the fallback when a tier omits a category.",
+  "default_quality": "best",
+  "quality_tiers": {
+    "fast": {
+      "roformer": "MDX23C-8KFFT-InstVoc_HQ.ckpt",
+      "rhythm":   "htdemucs.yaml",
+      "extra":    "htdemucs_6s.yaml"
+    },
+    "best": {
+      "roformer": "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
+      "rhythm":   "BS-Rofo-SW-Fixed.ckpt",
+      "extra":    "BS-Rofo-SW-Fixed.ckpt"
+    }
+  },
   "category_defaults": {
     "roformer": "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
-    "rhythm":   "htdemucs.yaml",
+    "rhythm":   "BS-Rofo-SW-Fixed.ckpt",
     "extra":    "BS-Rofo-SW-Fixed.ckpt"
   },
 
   "names": {
     "model_bs_roformer_ep_317_sdr_12.9755.ckpt": "BS-RoFormer",
+    "MDX23C-8KFFT-InstVoc_HQ.ckpt": "MDX23C InstVoc",
     "vocals_mel_band_roformer.ckpt": "Mel-Band",
     "htdemucs.yaml": "HTDemucs",
     "htdemucs_ft.yaml": "HTDemucs FT",
@@ -19,16 +34,26 @@
     "BS-Rofo-SW-Fixed.ckpt": "RoFormer SW"
   },
 
+  "_sdr_comment": "MVSep multisong leaderboard SDR per stem (mvsep.com/algorithms/77, /3, and the multisong leaderboard). One consistent benchmark, unlike audio-separator's built-in scores. The picker prefers these where present. DrumSep per-piece scores are on a drum-only dataset (different scale) so they are not mixed in here.",
+  "mvsep_sdr": {
+    "BS-Rofo-SW-Fixed.ckpt": {"vocals": 11.30, "drums": 14.11, "bass": 14.62, "guitar": 9.05, "piano": 7.83, "other": 8.71},
+    "htdemucs_ft.yaml": {"drums": 11.24, "bass": 12.05},
+    "htdemucs.yaml": {"drums": 10.90, "bass": 11.74},
+    "htdemucs_6s.yaml": {"drums": 10.59, "bass": 11.42},
+    "hdemucs_mmi.yaml": {"drums": 10.70, "bass": 11.17}
+  },
+
   "_notes_comment": "Short 'why' shown next to a model in the picker's right pane. Only the picks worth a sentence; everything else just shows its SDR.",
   "model_notes": {
-    "BS-Rofo-SW-Fixed.ckpt": "What charters use on MVSep",
+    "BS-Rofo-SW-Fixed.ckpt": "Best drums + bass, full band in one pass",
     "drumsep_5stems_mdx23c_jarredou.ckpt": "Best kit split (kick/snare/toms/hh/cym)",
     "MDX23C-DrumSep-aufr33-jarredou.ckpt": "Kit split with ride/crash separate",
-    "model_bs_roformer_ep_317_sdr_12.9755.ckpt": "Best instrumental",
+    "model_bs_roformer_ep_317_sdr_12.9755.ckpt": "Best instrumental, one-pass karaoke",
+    "MDX23C-8KFFT-InstVoc_HQ.ckpt": "Fast vocals/instrumental",
     "vocals_mel_band_roformer.ckpt": "Cleanest vocals",
-    "htdemucs.yaml": "Fast, solid 4-stem",
-    "htdemucs_ft.yaml": "Best 4-stem, slower",
-    "htdemucs_6s.yaml": "6-stem, faster than RoFormer SW"
+    "htdemucs.yaml": "Fast 4-stem (drums/bass/vocals/other)",
+    "htdemucs_ft.yaml": "Best demucs, 4x slower",
+    "htdemucs_6s.yaml": "Fast 6-stem (adds guitar/piano)"
   },
 
   "_sizes_comment": "Download size in MB for the consent prompt (measured via HEAD). Models not listed fall back to a live HEAD request (single files) or 'size unknown' (demucs yaml bundles).",
@@ -61,23 +86,10 @@
      "size_mb": 667}
   ],
 
-  "_kit_comment": "Drum-kit splitters: cascade (extract drums, then split). The jarredou 5-stem model has the better SDR on every shared piece, so it powers 4 and 6 piece too; the old 6-stem stays for ride/crash splits. The 4-piece sums hh into Cymbals afterward.",
-  "kit_models": [
-    {"name": "4 piece (Kick/Snare/Toms/Cymbals)", "model": "drumsep_5stems_mdx23c_jarredou.ckpt",
-     "pieces": ["kick", "snare", "toms", "hh", "cymbals"],
-     "merge": {"Cymbals": ["hh", "cymbals"]}},
-    {"name": "5 piece (Kick/Snare/Toms/HH/Cymbals)", "model": "drumsep_5stems_mdx23c_jarredou.ckpt",
-     "pieces": ["kick", "snare", "toms", "hh", "cymbals"]},
-    {"name": "6 piece (Kick/Snare/Toms/HH/Ride/Crash)", "model": "MDX23C-DrumSep-aufr33-jarredou.ckpt",
-     "pieces": ["kick", "snare", "toms", "hh", "ride", "crash"]}
-  ],
-
-  "curated": [
-    {"label": "Vocals (cleanest)",                 "model": "vocals_mel_band_roformer.ckpt",            "why": "Best vocal isolation (12.6)"},
-    {"label": "Instrumental (cleanest)",            "model": "model_bs_roformer_ep_317_sdr_12.9755.ckpt", "why": "Best instrumental (16.5)"},
-    {"label": "Vocals + Instrumental",              "model": "model_bs_roformer_ep_317_sdr_12.9755.ckpt", "why": "Karaoke split, one pass"},
-    {"label": "4-stem: drums / bass / vocals / other", "model": "htdemucs_ft.yaml",                      "why": "Best 4-stem, slower"},
-    {"label": "Full band: 6 stems",                 "model": "BS-Rofo-SW-Fixed.ckpt",                     "why": "What charters use on MVSep"},
-    {"label": "Full band: 6 stems (fast)",          "model": "htdemucs_6s.yaml",                          "why": "Faster fallback to SW"}
-  ]
+  "_kit_comment": "Drum-kit layouts keyed by output piece count. Each maps to a DrumSep model + its output pieces + an optional merge that groups pieces post-split. The jarredou 5-stem model has the better SDR on every shared piece, so it powers 4 and 5 piece; the old 6-stem handles ride/crash splits. The 4-piece sums hh into Cymbals afterward.",
+  "kit_layouts": {
+    "4": {"model": "drumsep_5stems_mdx23c_jarredou.ckpt", "pieces": ["kick", "snare", "toms", "hh", "cymbals"], "merge": {"Cymbals": ["hh", "cymbals"]}},
+    "5": {"model": "drumsep_5stems_mdx23c_jarredou.ckpt", "pieces": ["kick", "snare", "toms", "hh", "cymbals"]},
+    "6": {"model": "MDX23C-DrumSep-aufr33-jarredou.ckpt", "pieces": ["kick", "snare", "toms", "hh", "ride", "crash"]}
+  }
 }
