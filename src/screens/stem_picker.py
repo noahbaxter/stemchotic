@@ -1,152 +1,214 @@
 """
-Stem picker - the single screen.
+Main screen - a two-pane stems-and-settings view.
 
-One flat list of stems. Space highlights/de-highlights a stem; the live line
-below the box shows exactly which model(s) and settings the current selection
-resolves to. Enter on "Separate" runs it. "Advanced" lets you set the output
-format or browse/pick any model directly.
+LEFT pane is the stem checklist (Space/Enter toggles a stem) plus a pinned
+`+ Residual` toggle. Each stem row shows its resolved model. RIGHT pane is the
+settings: Output (Format/Quality/Scope) and, only when Drums is picked, Drum kit
+(Split/Source). Settings rows cycle on Space/Enter; section headers are skipped.
 
-Selection state lives in the caller-owned `state` dict so it survives backing
-out of the file prompt and returning after a run - it only clears when the app
-closes.
+M opens the model overlay, S starts splitting, Tab switches panes, Esc quits.
+
+Selection + settings live in the caller-owned `state` dict so they survive
+backing out of the file prompt and returning after a run - they only clear when
+the app closes.
 """
 
-from chotic_ui import Colors, Menu, MenuItem, MenuDivider
+from chotic_ui import Colors, TwoPane
 from ..core.engines import STEM_OPTIONS, plan_text, display_model, short_name, DEFAULT_QUALITY
 from .model_picker import show_model_overlay
 
 
-ACTION_SEPARATE = ("action", "separate")
-ACTION_FORMAT = ("action", "format")
-ACTION_MODEL = ("action", "model")
-ACTION_QUALITY = ("action", "quality")
-ACTION_SCOPE = ("action", "scope")
 FORMATS = ["WAV", "FLAC", "MP3"]
 QUALITIES = ["best", "fast"]
+KIT_SPLITS = ["off", "4", "5", "6"]
+KIT_SOURCES = ["song", "stem"]
 _QUALITY_LABEL = {"best": "Best", "fast": "Fast"}
 _SCOPE_LABEL = {False: "My picks", True: "Everything the models make"}
+_SPLIT_LABEL = {"off": "Off", "4": "4-piece", "5": "5-piece", "6": "6-piece"}
+_SOURCE_LABEL = {"song": "Full song", "stem": "Drum stem"}
 
+# Right-pane row values.
+SECTION = ("section",)           # non-selectable header sentinel
+SET_FORMAT = ("set", "format")
+SET_QUALITY = ("set", "quality")
+SET_SCOPE = ("set", "scope")
+SET_SPLIT = ("set", "split")
+SET_SOURCE = ("set", "source")
 
-def _layout():
-    """Row order with the kit pieces nested as a tree under Drums.
-    Returns (StemOption, connector) where connector is '' for top-level rows or
-    a tree glyph for nested kit pieces."""
-    kit = [o for o in STEM_OPTIONS if o.engine == "kit"]
-    rows = []
-    for opt in STEM_OPTIONS:
-        if opt.engine == "kit":
-            continue
-        rows.append((opt, ""))
-        if opt.name == "Drums":
-            for i, k in enumerate(kit):
-                rows.append((k, "└" if i == len(kit) - 1 else "├"))
-    return rows
+# Left-pane row values.
+ROW_RESIDUAL = ("residual",)
 
 
 def new_state() -> dict:
     """Fresh, session-long picker state."""
-    return {"selected": set(), "output_format": "WAV", "idx": 0, "models": {},
-            "one_pass": None, "quality": DEFAULT_QUALITY, "keep_all": False}
+    return {"selected": set(), "output_format": "WAV", "models": {},
+            "one_pass": None, "quality": DEFAULT_QUALITY, "keep_all": False,
+            "residual": False, "kit_split": "off", "kit_source": "song"}
+
+
+def _cycle(seq, cur):
+    i = seq.index(cur) if cur in seq else 0
+    return seq[(i + 1) % len(seq)]
 
 
 def show_stem_picker(state: dict) -> dict | None:
-    """Run the picker against persistent `state`. Returns a run request
-    {selected, output_format, models, one_pass} or None if quit."""
+    """Run the Main two-pane against persistent `state`. Returns a run request
+    {selected, output_format, models, one_pass, quality, keep_all, residual,
+    kit_split, kit_source} on Start, or None if quit."""
     selected: set = state["selected"]
-    idx = state.get("idx", 0)
+    state.setdefault("models", {})
+    state.setdefault("quality", DEFAULT_QUALITY)
+    state.setdefault("keep_all", False)
+    state.setdefault("residual", False)
+    state.setdefault("kit_split", "off")
+    state.setdefault("kit_source", "song")
 
     while True:
-        output_format = state["output_format"]
-        models = state.setdefault("models", {})
-        one_pass = state.get("one_pass")
-        quality = state.setdefault("quality", DEFAULT_QUALITY)
-        keep_all = state.setdefault("keep_all", False)
-        menu = Menu(
-            title="Pick your stems",
-            subtitle="Space to pick stems  ·  Tab to choose models  ·  Start splitting to run",
-            space_hint="Pick",
-            esc_label="Quit",
-            column_header=f"{Colors.MUTED}model{Colors.RESET}",
-        )
-
-        def build(m):
-            # Labels bake in color escapes, so this reruns on theme switch.
-            m.items.clear()
-            for opt, connector in _layout():
-                on = opt.name in selected
-                mark = f"{Colors.SUCCESS}●{Colors.RESET}" if on else f"{Colors.MUTED}○{Colors.RESET}"
-                name_col = Colors.SUCCESS if on else Colors.MUTED
-                prefix = f"   {Colors.DIM}{connector}{Colors.RESET} " if connector else ""
-                shown = short_name(one_pass) if one_pass else display_model(opt.name, models, quality)
-                m.add_item(MenuItem(label=f"{prefix}{mark} {name_col}{opt.name}{Colors.RESET}",
-                                    value=("stem", opt.name),
-                                    description=shown))
-
-            # Settings (inline), then the proceed action LAST.
-            m.add_item(MenuDivider(pinned=True))
-            m.add_item(MenuItem(
-                label=f"{Colors.MUTED}Output format:{Colors.RESET} {output_format}  {Colors.DIM}(Enter cycles){Colors.RESET}",
-                value=ACTION_FORMAT, pinned=True))
-            m.add_item(MenuItem(
-                label=f"{Colors.MUTED}Quality:{Colors.RESET} {_QUALITY_LABEL[quality]}  {Colors.DIM}(Enter cycles){Colors.RESET}",
-                value=ACTION_QUALITY, pinned=True))
-            m.add_item(MenuItem(
-                label=f"{Colors.MUTED}Output:{Colors.RESET} {_SCOPE_LABEL[keep_all]}  {Colors.DIM}(Enter cycles){Colors.RESET}",
-                value=ACTION_SCOPE, pinned=True))
-            m.add_item(MenuItem(
-                label=f"{Colors.MUTED}Choose models{Colors.RESET}  {Colors.DIM}(Tab){Colors.RESET}",
-                hotkey="M", value=ACTION_MODEL, pinned=True))
-            m.add_item(MenuDivider(pinned=True))
-            m.add_item(MenuItem(
-                label=f"{Colors.PRIMARY}Start splitting{Colors.RESET}  {Colors.DIM}→ choose audio file{Colors.RESET}",
-                value=ACTION_SEPARATE, pinned=True))
-
-            m.status_line = (f"{plan_text(list(selected), models, one_pass, quality, keep_all)}"
-                             f"    |    format: {output_format}  ·  quality: {_QUALITY_LABEL[quality]}")
-
-        menu.rebuild = build
-        build(menu)
-
-        result = menu.run(initial_index=idx)
-        if result is None:
-            state["idx"] = idx
+        pane = _build_pane(state)
+        ret = pane.run()
+        if ret is None:
             return None
-
-        try:
-            idx = menu.items.index(result.item)
-        except ValueError:
-            idx = 0
-        state["idx"] = idx
-
-        val = result.value
-
-        # Tab anywhere, or selecting "Choose models", opens the model overlay.
-        if result.action == "tab" or val == ACTION_MODEL:
+        ret = ret.lower()
+        if ret == "m":
             show_model_overlay(list(selected), state)
-            continue
+            continue   # rebuild fresh so model labels reflect any change
+        if ret == "s":
+            keep_all = state["keep_all"]
+            residual = state["residual"] and not keep_all   # exclusion
+            return {
+                "selected": list(selected),
+                "output_format": state["output_format"],
+                "models": dict(state["models"]),
+                "one_pass": state.get("one_pass"),
+                "quality": state["quality"],
+                "keep_all": keep_all,
+                "residual": residual,
+                "kit_split": state["kit_split"],
+                "kit_source": state["kit_source"],
+            }
 
-        if val == ACTION_FORMAT:
-            i = FORMATS.index(output_format) if output_format in FORMATS else 0
-            state["output_format"] = FORMATS[(i + 1) % len(FORMATS)]
-            continue
 
-        if val == ACTION_QUALITY:
-            i = QUALITIES.index(quality) if quality in QUALITIES else 0
-            state["quality"] = QUALITIES[(i + 1) % len(QUALITIES)]
-            continue
+def _build_pane(state: dict) -> TwoPane:
+    selected: set = state["selected"]
+    models = state["models"]
+    one_pass = state.get("one_pass")
+    quality = state["quality"]
+    keep_all = state["keep_all"]
+    drum_stem = state["kit_source"] == "stem"
 
-        if val == ACTION_SCOPE:
-            state["keep_all"] = not keep_all
-            continue
+    # --- left pane: stems + Residual ---
+    def left_rows():
+        rows = []
+        for opt in STEM_OPTIONS:
+            rows.append((_stem_render(opt, selected, models, quality, one_pass, drum_stem),
+                         ("stem", opt.name), True))
+        if drum_stem:
+            rows.append((lambda f, c: f"  {Colors.MUTED}input treated as a drum stem{Colors.RESET}",
+                         SECTION, False))
+        rows.append((_residual_render(state), ROW_RESIDUAL, True))
+        return rows
 
-        if val == ACTION_SEPARATE:
-            if not selected:
-                continue
-            return {"selected": list(selected), "output_format": output_format,
-                    "models": dict(models), "one_pass": state.get("one_pass"),
-                    "quality": quality, "keep_all": keep_all}
-
-        if isinstance(val, tuple) and val[0] == "stem":
-            # Enter and Space both just toggle; splitting only starts via Start splitting.
+    def on_left_enter(val):
+        if val == ROW_RESIDUAL:
+            if state["keep_all"]:
+                return   # disabled: Everything already gives every stem
+            state["residual"] = not state["residual"]
+        elif isinstance(val, tuple) and val[0] == "stem":
+            if drum_stem:
+                return   # instrument picks do not apply this run
             name = val[1]
             selected.discard(name) if name in selected else selected.add(name)
+
+    # --- right pane: settings ---
+    def right_rows(_left):
+        rows = [
+            (_header("Output"), SECTION, False),
+            (_set_render("Format", state["output_format"]), SET_FORMAT, True),
+            (_set_render("Quality", _QUALITY_LABEL[quality]), SET_QUALITY, True),
+            (_set_render("Scope", _SCOPE_LABEL[state["keep_all"]]), SET_SCOPE, True),
+        ]
+        if "Drums" in selected:
+            rows += [
+                (_header("Drum kit"), SECTION, False),
+                (_set_render("Split", _SPLIT_LABEL[state["kit_split"]]), SET_SPLIT, True),
+                (_set_render("Source", _SOURCE_LABEL[state["kit_source"]]), SET_SOURCE, True),
+            ]
+        return rows
+
+    def on_right_enter(val):
+        if val == SET_FORMAT:
+            state["output_format"] = _cycle(FORMATS, state["output_format"])
+        elif val == SET_QUALITY:
+            state["quality"] = _cycle(QUALITIES, state["quality"])
+        elif val == SET_SCOPE:
+            state["keep_all"] = not state["keep_all"]
+        elif val == SET_SPLIT:
+            state["kit_split"] = _cycle(KIT_SPLITS, state["kit_split"])
+        elif val == SET_SOURCE:
+            state["kit_source"] = _cycle(KIT_SOURCES, state["kit_source"])
+
+    plan = plan_text(list(selected), models, one_pass, quality, keep_all,
+                     state["kit_split"], state["kit_source"],
+                     state["residual"] and not keep_all)
+    footer = (f"  {Colors.PRIMARY}Tab{Colors.MUTED} panes  "
+              f"{Colors.PRIMARY}Space{Colors.MUTED} toggle/cycle  "
+              f"{Colors.PRIMARY}M{Colors.MUTED} models  "
+              f"{Colors.PRIMARY}S{Colors.MUTED} start splitting  "
+              f"{Colors.PRIMARY}Esc{Colors.MUTED} quit{Colors.RESET}\n"
+              f"  {Colors.DIM}{plan}{Colors.RESET}")
+
+    return TwoPane(
+        title="Stemchotic", subtitle="Space picks stems  ·  M for models  ·  S to split",
+        left_header="Stems", left_width=36,
+        left_rows=left_rows, right_rows=right_rows,
+        on_left_enter=on_left_enter, on_right_enter=on_right_enter,
+        right_filterable=False,
+        keys={"m": lambda: "return", "M": lambda: "return",
+              "s": lambda: "return", "S": lambda: "return"},
+        footer=footer, left_enter_focuses_right=False,
+    )
+
+
+# --- row renderers ---
+
+def _stem_render(opt, selected, models, quality, one_pass, drum_stem):
+    def render(focus, cursor):
+        on = opt.name in selected
+        mark = f"{Colors.SUCCESS}●{Colors.RESET}" if on else f"{Colors.MUTED}○{Colors.RESET}"
+        if drum_stem:
+            name_c = Colors.DIM
+            mark = f"{Colors.DIM}○{Colors.RESET}"
+        else:
+            name_c = Colors.SUCCESS if on else Colors.MUTED
+        cur = f"{Colors.PRIMARY}▸{Colors.RESET}" if cursor else " "
+        shown = short_name(one_pass) if one_pass else display_model(opt.name, models, quality)
+        label = f"{cur} {mark} {name_c}{opt.name}{Colors.RESET}"
+        # Model on the focused/active row only (keeps the narrow pane readable).
+        if cursor and not drum_stem:
+            label += f"  {Colors.MUTED}{shown}{Colors.RESET}"
+        return label
+    return render
+
+
+def _residual_render(state):
+    def render(focus, cursor):
+        cur = f"{Colors.PRIMARY}▸{Colors.RESET}" if cursor else " "
+        if state["keep_all"]:
+            return f"{cur} {Colors.DIM}+ Residual  (off: Scope){Colors.RESET}"
+        on = state["residual"]
+        mark = f"{Colors.SUCCESS}●{Colors.RESET}" if on else f"{Colors.MUTED}○{Colors.RESET}"
+        name_c = Colors.SUCCESS if on else Colors.MUTED
+        return f"{cur} {mark} {name_c}+ Residual{Colors.RESET}"
+    return render
+
+
+def _header(text):
+    return lambda f, c: f"{Colors.BOLD}-- {text} --{Colors.RESET}"
+
+
+def _set_render(label, value):
+    def render(focus, cursor):
+        cur = f"{Colors.PRIMARY}▸{Colors.RESET}" if cursor else " "
+        return (f"{cur} {Colors.MUTED}{label}:{Colors.RESET} {value}"
+                f"  {Colors.DIM}(Space cycles){Colors.RESET}")
+    return render
