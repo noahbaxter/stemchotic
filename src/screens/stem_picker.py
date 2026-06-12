@@ -171,6 +171,7 @@ def _build_pane(state: dict) -> TwoPane:
         keys={"m": lambda: "return", "M": lambda: "return",
               "s": lambda: "return", "S": lambda: "return"},
         footer=footer, left_enter_focuses_right=False,
+        cursor_style="highlight", header_style="bold",
     )
 
 
@@ -185,25 +186,24 @@ def _stem_render(opt, selected, models, quality, one_pass, drum_stem):
             mark = f"{Colors.DIM}○{Colors.RESET}"
         else:
             name_c = Colors.SUCCESS if on else Colors.MUTED
-        cur = f"{Colors.PRIMARY}▸{Colors.RESET}" if cursor else " "
-        left = f"{cur} {mark} {name_c}{opt.name}{Colors.RESET}"
+        left = f"{mark} {name_c}{opt.name}{Colors.RESET}"
         # Model in its own right-aligned column (the dedicated "model" space).
         shown = short_name(one_pass) if one_pass else display_model(opt.name, models, quality)
         model = "" if drum_stem else f"{Colors.MUTED}{shown}{Colors.RESET}"
-        gap = _LEFT_W - visible_len(left) - visible_len(model) - 1
+        # The widget reserves a 2-col cursor gutter, so our budget is _LEFT_W - 2.
+        gap = _LEFT_W - 2 - visible_len(left) - visible_len(model) - 1
         return f"{left}{' ' * max(1, gap)}{model}"
     return render
 
 
 def _residual_render(state):
     def render(focus, cursor):
-        cur = f"{Colors.PRIMARY}▸{Colors.RESET}" if cursor else " "
         if state["keep_all"]:
-            return f"{cur} {Colors.DIM}+ Residual  (off: Scope){Colors.RESET}"
+            return f"{Colors.DIM}+ Residual  (off: Scope){Colors.RESET}"
         on = state["residual"]
         mark = f"{Colors.SUCCESS}●{Colors.RESET}" if on else f"{Colors.MUTED}○{Colors.RESET}"
         name_c = Colors.SUCCESS if on else Colors.MUTED
-        return f"{cur} {mark} {name_c}+ Residual{Colors.RESET}"
+        return f"{mark} {name_c}+ Residual{Colors.RESET}"
     return render
 
 
@@ -213,7 +213,6 @@ def _header(text):
 
 def _set_render(label, value):
     def render(focus, cursor):
-        cur = f"{Colors.PRIMARY}▸{Colors.RESET}" if cursor else " "
-        return (f"{cur} {Colors.MUTED}{label}:{Colors.RESET} {value}"
+        return (f"{Colors.MUTED}{label}:{Colors.RESET} {value}"
                 f"  {Colors.DIM}(Space cycles){Colors.RESET}")
     return render

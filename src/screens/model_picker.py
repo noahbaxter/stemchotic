@@ -107,8 +107,8 @@ def _models_for(rows, cstem, engine, current):
 # --- rendering ---
 
 def _entry_label(e, focused_cursor):
-    mark = f"{Colors.SUCCESS}●{Colors.RESET}" if e["current"] else (
-        f"{Colors.PRIMARY}▸{Colors.RESET}" if focused_cursor else " ")
+    # The widget draws the cursor indicator; we draw only the current-selection dot.
+    mark = f"{Colors.SUCCESS}●{Colors.RESET}" if e["current"] else " "
     name = short_name(e["fn"]) if (e["pinned"] or e["fn"] in MODEL_SHORT) else e["fn"]
     name_c = Colors.BOLD if e["pinned"] else Colors.RESET
     sdr = e["sdr"]
@@ -122,12 +122,11 @@ def _entry_label(e, focused_cursor):
 
 
 def _left_row(name, is_active, focus_left):
-    """Render a left-pane target row: ▸ (focus left) / • (focus right) on the
-    active target, muted otherwise."""
+    """Render a left-pane target row. The widget draws the cursor indicator; we
+    only colour the active target bold and mute the rest."""
     if is_active:
-        mk = f"{Colors.PRIMARY}▸{Colors.RESET}" if focus_left else f"{Colors.SUCCESS}•{Colors.RESET}"
-        return f"{mk} {Colors.BOLD if focus_left else ''}{name}{Colors.RESET}"
-    return f"  {Colors.MUTED}{name}{Colors.RESET}"
+        return f"{Colors.BOLD if focus_left else ''}{name}{Colors.RESET}"
+    return f"{Colors.MUTED}{name}{Colors.RESET}"
 
 
 def show_model_overlay(selected: list, state: dict) -> None:
