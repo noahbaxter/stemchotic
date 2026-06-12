@@ -15,10 +15,12 @@ Demucs, and the BS-RoFormer family.
 Working for single-model stems. The picker, live plan text, single-stem and
 multi-stem (filtered) output, vocals/instrumental routing to RoFormer, output
 next to the input, and silenced logging are all verified on real files. The
-drum-kit cascade (drums via HTDemucs, then split into kit pieces via MDX23C
-DrumSep) is verified end to end on real audio, in both 4-piece and 6-piece
-form and in WAV and FLAC output. Launcher built and release pipeline in place;
-Windows/Linux smoke tests pending.
+drum-kit cascade (drums via HTDemucs, then split into kit pieces via DrumSep)
+is verified end to end on real audio, in 4/5/6-piece form and in WAV and FLAC
+output. Two SOTA public-weight models ship via a registry overlay: jarredou's
+DrumSep 5-stem (kit default) and BS-Roformer-SW (guitar/piano/other default,
+HTDemucs 6s as the fast fallback). Launcher built and release pipeline in
+place; Windows/Linux smoke tests pending.
 
 ## Install
 
@@ -99,10 +101,11 @@ persists for the whole session.
 |---|---|---|
 | `vocals` | Vocals, Instrumental | BS-RoFormer |
 | `instrumental` | Instrumental | BS-RoFormer |
-| `band` | Drums, Bass, Vocals, Guitar, Piano, Other | HTDemucs 6-stem (vocals routed to RoFormer) |
+| `band` | Drums, Bass, Vocals, Guitar, Piano, Other | Drums/Bass via HTDemucs, Guitar/Piano/Other via BS-Roformer-SW, vocals routed to RoFormer |
 | `drums` | Drums | single file |
-| `kit` | Kick, Snare, Toms, HH, Ride, Crash | MDX23C DrumSep cascade (6 piece) |
-| `kit4` | Kick, Snare, Toms, Cymbals | same cascade, cymbals summed (4 piece) |
+| `kit` | Kick, Snare, Toms, HH, Cymbals | jarredou DrumSep 5-stem cascade (5 piece) |
+| `kit4` | Kick, Snare, Toms, Cymbals | same 5-stem cascade, hh summed into cymbals (4 piece) |
+| `kit6` | Kick, Snare, Toms, HH, Ride, Crash | MDX23C DrumSep 6-stem cascade (6 piece) |
 | `bass` | Bass | single file |
 
 ## Credits
