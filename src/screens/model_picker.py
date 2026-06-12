@@ -115,10 +115,20 @@ def _entry_label(e, focused_cursor):
     sdr_s = f"{sdr:4.1f}" if isinstance(sdr, (int, float)) and sdr else "   -"
     tier = e["tier"]
     tier_s = f"{_TIER_COLOR.get(tier, Colors.MUTED)}{tier:<4}{Colors.RESET}"
-    head = f"{mark} {Colors.PRIMARY}{sdr_s}{Colors.RESET} {tier_s} {name_c}{name}{Colors.RESET}"
+    # The note lives in the detail line (full width), not crammed into the row.
+    return f"{mark} {Colors.PRIMARY}{sdr_s}{Colors.RESET} {tier_s} {name_c}{name}{Colors.RESET}"
+
+
+def _detail(e):
+    """Full-width help line for the focused model: friendly name, its note (the
+    'why'), and the raw filename, none of it truncated in-column."""
+    if not e:
+        return ""
+    parts = [f"{Colors.BOLD}{short_name(e['fn'])}{Colors.RESET}"]
     if e["note"]:
-        head += f"   {Colors.MUTED}{e['note']}{Colors.RESET}"
-    return head
+        parts.append(f"{Colors.MUTED}{e['note']}{Colors.RESET}")
+    parts.append(f"{Colors.DIM}{e['fn']}{Colors.RESET}")
+    return "  ·  ".join(parts)
 
 
 def _left_row(name, is_active, focus_left):
@@ -169,7 +179,7 @@ def show_model_overlay(selected: list, state: dict) -> None:
         left_header="Target",
         left_rows=left_rows, right_rows=right_rows,
         on_right_enter=on_right_enter, right_filterable=True,
-        search_key=search_key,
+        search_key=search_key, detail=_detail,
         cursor_style="highlight", header_style="bold",
     )
     pane.run()
