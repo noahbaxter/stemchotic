@@ -59,8 +59,18 @@ CLI_PRESETS = {
     "bass": ["Bass"],
 }
 if _KIT_NAMES:
-    CLI_PRESETS["kit"] = [_KIT_NAMES[-1]]   # default kit = the 6-piece (last)
-    CLI_PRESETS["kit4"] = [_KIT_NAMES[0]]   # the 4-piece
+    # Map kit options by their OUTPUT piece count (merges collapse pieces).
+    _kit_by_count = {}
+    for _opt in STEM_OPTIONS:
+        if _opt.engine != "kit":
+            continue
+        _n = len(_opt.pieces or ()) - sum(len(v) - 1 for v in (_opt.merge or {}).values())
+        _kit_by_count.setdefault(_n, _opt.name)
+    CLI_PRESETS["kit"] = [_kit_by_count.get(5, _KIT_NAMES[0])]   # default kit = 5 piece
+    if 4 in _kit_by_count:
+        CLI_PRESETS["kit4"] = [_kit_by_count[4]]
+    if 6 in _kit_by_count:
+        CLI_PRESETS["kit6"] = [_kit_by_count[6]]
 
 
 def short_name(filename: str) -> str:

@@ -130,15 +130,17 @@ def _merge_pieces(paths: list[str], merge: dict, base: str, output_format: str) 
             mix = audio if mix is None else mix + audio
         mix = np.clip(mix, -1.0, 1.0)
 
+        # Remove the parts BEFORE writing: the merged name may collide with one
+        # of them (e.g. hh+cymbals -> Cymbals), and writing first would get the
+        # fresh file deleted by this cleanup.
         out_path = os.path.join(os.path.dirname(part_paths[0]), f"{base} [{new_name}].{ext}")
-        sf.write(out_path, mix, sr)
-
         for pp in part_paths:
             kept.remove(pp)
             try:
                 os.remove(pp)
             except OSError:
                 pass
+        sf.write(out_path, mix, sr)
         kept.append(out_path)
     return kept
 

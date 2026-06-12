@@ -4,7 +4,7 @@
   "category_defaults": {
     "roformer": "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
     "rhythm":   "htdemucs.yaml",
-    "extra":    "htdemucs_6s.yaml"
+    "extra":    "BS-Rofo-SW-Fixed.ckpt"
   },
 
   "names": {
@@ -14,7 +14,9 @@
     "htdemucs_ft.yaml": "HTDemucs FT",
     "htdemucs_6s.yaml": "HTDemucs 6s",
     "hdemucs_mmi.yaml": "HDemucs MMI",
-    "MDX23C-DrumSep-aufr33-jarredou.ckpt": "DrumSep"
+    "MDX23C-DrumSep-aufr33-jarredou.ckpt": "DrumSep",
+    "drumsep_5stems_mdx23c_jarredou.ckpt": "DrumSep 5",
+    "BS-Rofo-SW-Fixed.ckpt": "RoFormer SW"
   },
 
   "_sizes_comment": "Download size in MB for the consent prompt (measured via HEAD). Models not listed fall back to a live HEAD request (single files) or 'size unknown' (demucs yaml bundles).",
@@ -45,11 +47,13 @@
      "size_mb": 667}
   ],
 
-  "_kit_comment": "Drum-kit splitters: cascade (extract drums, then split). Both use the 6-piece catalogue model; the 4-piece groups hh/ride/crash into Cymbals afterward.",
+  "_kit_comment": "Drum-kit splitters: cascade (extract drums, then split). The jarredou 5-stem model has the better SDR on every shared piece, so it powers 4 and 6 piece too; the old 6-stem stays for ride/crash splits. The 4-piece sums hh into Cymbals afterward.",
   "kit_models": [
-    {"name": "4 piece (Kick/Snare/Toms/Cymbals)", "model": "MDX23C-DrumSep-aufr33-jarredou.ckpt",
-     "pieces": ["kick", "snare", "toms", "hh", "ride", "crash"],
-     "merge": {"Cymbals": ["hh", "ride", "crash"]}},
+    {"name": "4 piece (Kick/Snare/Toms/Cymbals)", "model": "drumsep_5stems_mdx23c_jarredou.ckpt",
+     "pieces": ["kick", "snare", "toms", "hh", "cymbals"],
+     "merge": {"Cymbals": ["hh", "cymbals"]}},
+    {"name": "5 piece (Kick/Snare/Toms/HH/Cymbals)", "model": "drumsep_5stems_mdx23c_jarredou.ckpt",
+     "pieces": ["kick", "snare", "toms", "hh", "cymbals"]},
     {"name": "6 piece (Kick/Snare/Toms/HH/Ride/Crash)", "model": "MDX23C-DrumSep-aufr33-jarredou.ckpt",
      "pieces": ["kick", "snare", "toms", "hh", "ride", "crash"]}
   ],
@@ -59,6 +63,7 @@
     {"label": "Instrumental (cleanest)",            "model": "model_bs_roformer_ep_317_sdr_12.9755.ckpt", "why": "Best instrumental (16.5)"},
     {"label": "Vocals + Instrumental",              "model": "model_bs_roformer_ep_317_sdr_12.9755.ckpt", "why": "Karaoke split, one pass"},
     {"label": "4-stem: drums / bass / vocals / other", "model": "htdemucs_ft.yaml",                      "why": "Best 4-stem, slower"},
-    {"label": "Full band: 6 stems",                 "model": "htdemucs_6s.yaml",                          "why": "+ guitar / piano / other"}
+    {"label": "Full band: 6 stems",                 "model": "BS-Rofo-SW-Fixed.ckpt",                     "why": "What charters use on MVSep"},
+    {"label": "Full band: 6 stems (fast)",          "model": "htdemucs_6s.yaml",                          "why": "Faster fallback to SW"}
   ]
 }
