@@ -22,6 +22,7 @@ MODEL_SHORT = CONFIG["names"]                # model filename -> friendly short 
 QUALITY_TIERS = CONFIG["quality_tiers"]      # quality -> {category: model filename}
 DEFAULT_QUALITY = CONFIG.get("default_quality", "best")
 MVSEP_SDR = CONFIG.get("mvsep_sdr", {})      # model filename -> {stem: mvsep sdr}
+DRUMSEP_SDR = CONFIG.get("drumsep_sdr", {})  # drumsep model -> {piece: drum-dataset sdr}
 KIT_LAYOUTS = CONFIG["kit_layouts"]          # piece count -> {model, pieces, merge}
 
 

@@ -13,8 +13,9 @@ Enter sets the focused model for that target. Picks write into the picker state
 import re
 
 from chotic_ui import Colors, TwoPane
-from ..core.engines import (CONFIG, ENGINE_MODEL, MODEL_SHORT, MVSEP_SDR, _NAME_TO_ENGINE,
-                            category_model, short_name, weight_tier, DEFAULT_QUALITY)
+from ..core.engines import (CONFIG, DRUMSEP_SDR, ENGINE_MODEL, KIT_LAYOUTS, MODEL_SHORT,
+                            MVSEP_SDR, _NAME_TO_ENGINE, category_model, short_name,
+                            weight_tier, DEFAULT_QUALITY)
 
 _SDR_NUM = re.compile(r"\(([\d.]+)\)")
 _TIER_COLOR = {"fast": Colors.SUCCESS, "avg": Colors.MUTED, "slow": Colors.ERROR}
@@ -29,9 +30,29 @@ TARGETS = [
     ("Drums", "drums", "rhythm"),
     ("Bass", "bass", "rhythm"),
     ("Other", "guitar", "extra"),   # one 6-stem model; governs guitar/piano/other
+    ("Drum kit", "_kit", "kit"),    # sentinel cstem: list DrumSep models directly
 ]
 
 _CATALOG = None
+
+
+def _kit_entries(current):
+    """Right-pane entries for the Drum kit target: the distinct DrumSep models
+    (deduped across KIT_LAYOUTS), each carrying its per-piece SDR. Not ranked by
+    a catalogue stem; sorted by the kick score for display."""
+    seen, out = set(), []
+    for lay in KIT_LAYOUTS.values():
+        fn = lay["model"]
+        if fn in seen:
+            continue
+        seen.add(fn)
+        pieces = DRUMSEP_SDR.get(fn, {})
+        out.append({"fn": fn, "sdr": pieces.get("kick"), "arch": "MDXC",
+                    "tier": weight_tier("MDXC", fn), "note": _NOTES.get(fn, ""),
+                    "current": fn == current, "pinned": True, "_engine": "kit",
+                    "_pieces": pieces})
+    out.sort(key=lambda e: e["sdr"] or 0, reverse=True)
+    return out
 
 
 def _parse(info: dict) -> dict:
@@ -166,7 +187,11 @@ def _detail(e):
     parts = [f"{Colors.BOLD}{short_name(e['fn'])}{Colors.RESET}"]
     if e["note"]:
         parts.append(f"{Colors.MUTED}{e['note']}{Colors.RESET}")
-    parts.append(f"{Colors.DIM}{e['fn']}{Colors.RESET}")
+    if e.get("_pieces"):                # kit entry: show per-piece DrumSep-dataset SDR
+        scores = "  ".join(f"{name} {sdr:.1f}" for name, sdr in e["_pieces"].items())
+        parts.append(f"{Colors.PRIMARY}{scores}{Colors.RESET}")
+    else:
+        parts.append(f"{Colors.DIM}{e['fn']}{Colors.RESET}")
     return "  ·  ".join(parts)
 
 
@@ -204,6 +229,9 @@ def show_model_overlay(selected: list, state: dict) -> None:
 
     def right_rows(target, query):
         _, cstem, engine = target
+        if cstem == "_kit":             # not a catalogue stem: list DrumSep models directly
+            cur = models.get("kit", KIT_LAYOUTS["5"]["model"])
+            return [_entry_row(e, "kit") for e in _kit_entries(cur)]
         cur = category_model(engine, state.get("quality", DEFAULT_QUALITY), models)
         full = _models_for(rows, cstem, engine, cur)
         n = len(full)
@@ -225,7 +253,8 @@ def show_model_overlay(selected: list, state: dict) -> None:
             view["all"] = False
             return
         eng, fn = val["_engine"], val["fn"]
-        if fn == ENGINE_MODEL.get(eng):
+        default = KIT_LAYOUTS["5"]["model"] if eng == "kit" else ENGINE_MODEL.get(eng)
+        if fn == default:
             models.pop(eng, None)   # back to the built-in default
         else:
             models[eng] = fn
@@ -236,7 +265,8 @@ def show_model_overlay(selected: list, state: dict) -> None:
         return f"{val['fn']} {short_name(val['fn'])}"
 
     pane = TwoPane(
-        title="Choose models", subtitle="(SDR = MVSep where available)",
+        title="Choose models",
+        subtitle="(SDR = MVSep where available; Drum kit scores are DrumSep-dataset)",
         left_header="Target",
         left_rows=left_rows, right_rows=right_rows,
         on_right_enter=on_right_enter, right_filterable=True,

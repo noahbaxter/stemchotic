@@ -43,6 +43,12 @@
     "hdemucs_mmi.yaml": {"drums": 10.70, "bass": 11.17}
   },
 
+  "_drumsep_sdr_comment": "Per-piece SDR on MVSep's drum-only DrumSep dataset (mvsep.com/algorithms/29). A different benchmark from the whole-song MVSep numbers; shown only in the Drum kit target.",
+  "drumsep_sdr": {
+    "MDX23C-DrumSep-aufr33-jarredou.ckpt": {"kick": 18.32, "snare": 13.60, "toms": 13.25, "hh": 5.38, "ride": 7.56, "crash": 6.71},
+    "drumsep_5stems_mdx23c_jarredou.ckpt": {"kick": 18.32, "snare": 13.60, "toms": 13.25, "hh": 5.38, "cymbals": 6.71}
+  },
+
   "_notes_comment": "Short 'why' shown next to a model in the picker's right pane. Only the picks worth a sentence; everything else just shows its SDR.",
   "model_notes": {
     "BS-Rofo-SW-Fixed.ckpt": "Best drums + bass, full band in one pass",
