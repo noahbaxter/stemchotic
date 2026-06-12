@@ -13,9 +13,11 @@ backing out of the file prompt and returning after a run - they only clear when
 the app closes.
 """
 
-from chotic_ui import Colors, TwoPane
+from chotic_ui import Colors, TwoPane, visible_len
 from ..core.engines import STEM_OPTIONS, plan_text, display_model, short_name, DEFAULT_QUALITY
 from .model_picker import show_model_overlay
+
+_LEFT_W = 40   # left pane width; wide enough for the stem name + its model column
 
 
 FORMATS = ["WAV", "FLAC", "MP3"]
@@ -147,19 +149,22 @@ def _build_pane(state: dict) -> TwoPane:
         elif val == SET_SOURCE:
             state["kit_source"] = _cycle(KIT_SOURCES, state["kit_source"])
 
-    plan = plan_text(list(selected), models, one_pass, quality, keep_all,
-                     state["kit_split"], state["kit_source"],
-                     state["residual"] and not keep_all)
-    footer = (f"  {Colors.PRIMARY}Tab{Colors.MUTED} panes  "
-              f"{Colors.PRIMARY}Space{Colors.MUTED} toggle/cycle  "
-              f"{Colors.PRIMARY}M{Colors.MUTED} models  "
-              f"{Colors.PRIMARY}S{Colors.MUTED} start splitting  "
-              f"{Colors.PRIMARY}Esc{Colors.MUTED} quit{Colors.RESET}\n"
-              f"  {Colors.DIM}{plan}{Colors.RESET}")
+    def footer():
+        # Recomputed each frame so the plan reflects live toggles.
+        plan = plan_text(list(selected), models, one_pass, quality, state["keep_all"],
+                         state["kit_split"], state["kit_source"],
+                         state["residual"] and not state["keep_all"])
+        keys = (f"  {Colors.PRIMARY}Tab{Colors.MUTED} panes  "
+                f"{Colors.PRIMARY}Space{Colors.MUTED} toggle/cycle  "
+                f"{Colors.PRIMARY}M{Colors.MUTED} models  "
+                f"{Colors.PRIMARY}S{Colors.MUTED} start splitting  "
+                f"{Colors.PRIMARY}Esc{Colors.MUTED} quit{Colors.RESET}")
+        return f"{keys}\n  {Colors.DIM}{plan}{Colors.RESET}"
 
     return TwoPane(
         title="Stemchotic", subtitle="Space picks stems  ·  M for models  ·  S to split",
-        left_header="Stems", left_width=36,
+        left_header="Stem Selection", right_header="Settings", show_count=False,
+        left_width=_LEFT_W,
         left_rows=left_rows, right_rows=right_rows,
         on_left_enter=on_left_enter, on_right_enter=on_right_enter,
         right_filterable=False,
@@ -181,12 +186,12 @@ def _stem_render(opt, selected, models, quality, one_pass, drum_stem):
         else:
             name_c = Colors.SUCCESS if on else Colors.MUTED
         cur = f"{Colors.PRIMARY}▸{Colors.RESET}" if cursor else " "
+        left = f"{cur} {mark} {name_c}{opt.name}{Colors.RESET}"
+        # Model in its own right-aligned column (the dedicated "model" space).
         shown = short_name(one_pass) if one_pass else display_model(opt.name, models, quality)
-        label = f"{cur} {mark} {name_c}{opt.name}{Colors.RESET}"
-        # Model on the focused/active row only (keeps the narrow pane readable).
-        if cursor and not drum_stem:
-            label += f"  {Colors.MUTED}{shown}{Colors.RESET}"
-        return label
+        model = "" if drum_stem else f"{Colors.MUTED}{shown}{Colors.RESET}"
+        gap = _LEFT_W - visible_len(left) - visible_len(model) - 1
+        return f"{left}{' ' * max(1, gap)}{model}"
     return render
 
 
