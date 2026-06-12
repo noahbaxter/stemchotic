@@ -19,6 +19,18 @@
     "BS-Rofo-SW-Fixed.ckpt": "RoFormer SW"
   },
 
+  "_notes_comment": "Short 'why' shown next to a model in the picker's right pane. Only the picks worth a sentence; everything else just shows its SDR.",
+  "model_notes": {
+    "BS-Rofo-SW-Fixed.ckpt": "What charters use on MVSep",
+    "drumsep_5stems_mdx23c_jarredou.ckpt": "Best kit split (kick/snare/toms/hh/cym)",
+    "MDX23C-DrumSep-aufr33-jarredou.ckpt": "Kit split with ride/crash separate",
+    "model_bs_roformer_ep_317_sdr_12.9755.ckpt": "Best instrumental",
+    "vocals_mel_band_roformer.ckpt": "Cleanest vocals",
+    "htdemucs.yaml": "Fast, solid 4-stem",
+    "htdemucs_ft.yaml": "Best 4-stem, slower",
+    "htdemucs_6s.yaml": "6-stem, faster than RoFormer SW"
+  },
+
   "_sizes_comment": "Download size in MB for the consent prompt (measured via HEAD). Models not listed fall back to a live HEAD request (single files) or 'size unknown' (demucs yaml bundles).",
   "sizes_mb": {
     "model_bs_roformer_ep_317_sdr_12.9755.ckpt": 610,
@@ -33,6 +45,7 @@
      "config": "config_drumsep5_mdx23c.yaml",
      "group": "mdx23c_download_list",
      "entry_name": "MDX23C Model: DrumSep 5-stem by jarredou",
+     "stems": ["kick", "snare", "toms", "hh", "cymbals"],
      "urls": {
        "ckpt": "https://media.githubusercontent.com/media/EverlastEngineering/DrumToMIDI/main/mdx_models/drumsep_5stems_mdx23c_jarredou.ckpt",
        "config": "https://raw.githubusercontent.com/EverlastEngineering/DrumToMIDI/main/mdx_models/config_mdx23c.yaml"},
@@ -41,6 +54,7 @@
      "config": "BS-Roformer-SW-Fixed.yaml",
      "group": "roformer_download_list",
      "entry_name": "Roformer Model: BS-Roformer-SW by jarredou",
+     "stems": ["vocals", "drums", "bass", "guitar", "piano", "other"],
      "urls": {
        "ckpt": "https://huggingface.co/enerjazzer/BS-ROFO-SW-Fixed/resolve/main/BS-Rofo-SW-Fixed.ckpt",
        "config": "https://huggingface.co/enerjazzer/BS-ROFO-SW-Fixed/resolve/main/BS-Rofo-SW-Fixed.yaml"},
