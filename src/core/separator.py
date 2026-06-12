@@ -237,8 +237,9 @@ def run(
                 drums_path, reused = input_file, True   # the input file IS the drum stem
             else:
                 # Reuse a [Drums] stem already produced this run (rhythm pass)
-                # instead of extracting drums a second time.
-                drums_path = next((r for r in results if Path(r).stem.endswith("[Drums]")), None)
+                # instead of extracting drums a second time. Match the token
+                # anywhere, since keep_all tags the name "[Drums] (Model)".
+                drums_path = next((r for r in results if "[Drums]" in Path(r).stem), None)
                 reused = drums_path is not None
                 if not reused:
                     progress(f"[{i}/{total}] Extracting drums ({short_name(rhythm_model)})...")
