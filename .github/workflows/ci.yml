@@ -1,0 +1,115 @@
+name: CI
+
+# Validate every push/PR without publishing: a fast torch-free sanity check plus
+# unsigned launcher builds on all three platforms (catches PyInstaller breakage).
+# Signing, notarization, and the published Release live in release.yml (tags only).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the TUI toolkit (no torch)
+        run: pip install -e ./libs/chotic-ui
+
+      - name: Parse, import, and list
+        run: |
+          python -c "import ast, glob; [ast.parse(open(f).read()) for f in glob.glob('src/**/*.py', recursive=True) + ['stemchotic.py', 'launcher.py']]; print('parse ok')"
+          python -c "from src.screens import stem_picker, model_picker; from src.core import engines, separator, model_cache, registry, progress; print('imports ok')"
+          python stemchotic.py --list
+
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Build app.zip
+        run: |
+          git ls-files | grep -v '^libs/chotic-ui$' | zip -q app.zip -@
+          (cd libs/chotic-ui && git ls-files | sed 's|^|libs/chotic-ui/|') | zip -q app.zip -@
+          echo "ci-${GITHUB_SHA::7}" > .version && zip -q app.zip .version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: app.zip
+
+  launcher:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            name: macos
+            artifact: stemchotic-launcher-macos
+          - os: windows-latest
+            name: windows
+            artifact: stemchotic-launcher.exe
+          - os: ubuntu-latest
+            name: linux
+            artifact: stemchotic-launcher-linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyinstaller certifi
+
+      - name: Build launcher (macOS, unsigned)
+        if: matrix.name == 'macos'
+        run: |
+          CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())")
+          pyinstaller --onefile --name stemchotic-launcher-macos --clean --noconfirm \
+            --add-data "$CERTIFI_PATH:certifi" \
+            --hidden-import certifi \
+            launcher.py
+
+      - name: Build launcher (Windows)
+        if: matrix.name == 'windows'
+        run: |
+          $CERTIFI_PATH = python -c "import certifi; print(certifi.where())"
+          pyinstaller --onefile --name stemchotic-launcher --clean --noconfirm `
+            --add-data "$CERTIFI_PATH;certifi" `
+            --hidden-import certifi `
+            launcher.py
+        shell: pwsh
+
+      - name: Build launcher (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())")
+          pyinstaller --onefile --name stemchotic-launcher-linux --clean --noconfirm \
+            --add-data "$CERTIFI_PATH:certifi" \
+            --hidden-import certifi \
+            launcher.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
