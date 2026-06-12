@@ -121,8 +121,6 @@ def show_model_overlay(selected: list, state: dict) -> None:
                     items.append((_label(fn, arch, sdr, fn == state.get("one_pass")), ("onepass", None, fn)))
 
         for title, cstem, engine in _STEM_SECTIONS:
-            if selected and engine not in sel_engines:
-                continue
             cands = _by_stem(rows, cstem)
             if not cands:
                 continue
