@@ -11,11 +11,8 @@ Enter sets the focused model for that target. Picks write into the picker state
 """
 
 import re
-import sys
 
-from chotic_ui import Colors, getch, print_header, visible_len, pad_to
-from chotic_ui.primitives import cbreak_noecho, KEY_UP, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_TAB, KEY_BACKSPACE, KEY_SPACE
-from chotic_ui.components import box_row, BOX_TL, BOX_TR, BOX_BL, BOX_BR, BOX_H, BOX_V, BOX_TL_DIV, BOX_TR_DIV
+from chotic_ui import Colors, TwoPane
 from ..core.engines import (CONFIG, ENGINE_MODEL, MODEL_SHORT, MVSEP_SDR, _NAME_TO_ENGINE,
                             category_model, short_name, weight_tier, DEFAULT_QUALITY)
 
@@ -35,12 +32,6 @@ TARGETS = [
 ]
 
 _CATALOG = None
-
-
-def _body_h(term, n):
-    """Visible body rows: enough for the target list and the entries on screen,
-    capped to terminal height."""
-    return max(len(TARGETS), min(term[1] - 14, max(n, 1)))
 
 
 def _parse(info: dict) -> dict:
@@ -115,7 +106,7 @@ def _models_for(rows, cstem, engine, current):
 
 # --- rendering ---
 
-def _entry_label(e, width, focused_cursor):
+def _entry_label(e, focused_cursor):
     mark = f"{Colors.SUCCESS}●{Colors.RESET}" if e["current"] else (
         f"{Colors.PRIMARY}▸{Colors.RESET}" if focused_cursor else " ")
     name = short_name(e["fn"]) if (e["pinned"] or e["fn"] in MODEL_SHORT) else e["fn"]
@@ -127,70 +118,16 @@ def _entry_label(e, width, focused_cursor):
     head = f"{mark} {Colors.PRIMARY}{sdr_s}{Colors.RESET} {tier_s} {name_c}{name}{Colors.RESET}"
     if e["note"]:
         head += f"   {Colors.MUTED}{e['note']}{Colors.RESET}"
-    return pad_to(head, width)
+    return head
 
 
-def _frame(target_idx, entries, cursor, scroll, query, focus, cur_fn, term):
-    w = max(72, min(term[0] - 2, 110))
-    rows_h = _body_h(term, len(entries))
-    inner = w - 4
-    left_w = 22
-    right_w = inner - left_w - 3            # " │ " between columns
-    c = Colors.PRIMARY
-    lines = [box_row(BOX_TL, BOX_H, BOX_TR, w, c)]
-
-    def row(content):
-        pad = inner - visible_len(content)
-        lines.append(f"{c}{BOX_V}{Colors.RESET} {content}{' ' * max(0, pad)} {c}{BOX_V}{Colors.RESET}")
-
-    def two(left, right):
-        row(f"{pad_to(left, left_w)} {Colors.DIM}{BOX_V}{Colors.RESET} {pad_to(right, right_w)}")
-
-    row(f"{Colors.BOLD}Choose models{Colors.RESET}  {Colors.MUTED}(SDR = MVSep where available){Colors.RESET}")
-    lines.append(box_row(BOX_TL_DIV, BOX_H, BOX_TR_DIV, w, c))
-
-    n = len(entries)
-    filt = f"{Colors.PRIMARY}Filter:{Colors.RESET} {query}{Colors.PRIMARY}▌{Colors.RESET}" if focus == "right" \
-        else f"{Colors.MUTED}(type to filter){Colors.RESET}"
-    count = f"{Colors.MUTED}{n}{Colors.RESET}"
-    pad = right_w - visible_len(filt) - visible_len(count)
-    two(f"{Colors.BOLD}Target{Colors.RESET}", f"{filt}{' ' * max(1, pad)}{count}")
-    lines.append(box_row(BOX_TL_DIV, BOX_H, BOX_TR_DIV, w, c))
-
-    end = min(n, scroll + rows_h)
-    for r in range(rows_h):
-        # left column: the target list (only the first len(TARGETS) rows)
-        if r < len(TARGETS):
-            t = TARGETS[r][0]
-            if r == target_idx:
-                mk = f"{Colors.PRIMARY}▸{Colors.RESET}" if focus == "left" else f"{Colors.SUCCESS}•{Colors.RESET}"
-                left = f"{mk} {Colors.BOLD if focus == 'left' else ''}{t}{Colors.RESET}"
-            else:
-                left = f"  {Colors.MUTED}{t}{Colors.RESET}"
-        else:
-            left = ""
-        # right column: scrolled entry window
-        idx = scroll + r
-        if r == 0 and scroll > 0:
-            right = f"{Colors.MUTED}  ▲ {scroll} above{Colors.RESET}"
-        elif r == rows_h - 1 and end < n:
-            right = f"{Colors.MUTED}  ▼ {n - end} below{Colors.RESET}"
-        elif idx < n:
-            right = _entry_label(entries[idx], right_w, focus == "right" and idx == cursor)
-        else:
-            right = ""
-        two(left, right)
-
-    lines.append(box_row(BOX_BL, BOX_H, BOX_BR, w, c))
-    lines.append(f"  {Colors.PRIMARY}Tab{Colors.MUTED} switch pane  {Colors.PRIMARY}↑/↓{Colors.MUTED} move  "
-                 f"{Colors.PRIMARY}Enter{Colors.MUTED} set  {Colors.PRIMARY}Esc{Colors.MUTED} done  "
-                 f"{Colors.DIM}(type to filter the right){Colors.RESET}")
-
-    out = sys.__stdout__ if sys.__stdout__ else sys.stdout
-    out.write("\033[H\033[J")
-    print_header()
-    out.write("\n".join(lines).replace("\n", "\033[K\n") + "\033[J\033[3J")
-    out.flush()
+def _left_row(name, is_active, focus_left):
+    """Render a left-pane target row: ▸ (focus left) / • (focus right) on the
+    active target, muted otherwise."""
+    if is_active:
+        mk = f"{Colors.PRIMARY}▸{Colors.RESET}" if focus_left else f"{Colors.SUCCESS}•{Colors.RESET}"
+        return f"{mk} {Colors.BOLD if focus_left else ''}{name}{Colors.RESET}"
+    return f"  {Colors.MUTED}{name}{Colors.RESET}"
 
 
 def show_model_overlay(selected: list, state: dict) -> None:
@@ -202,74 +139,37 @@ def show_model_overlay(selected: list, state: dict) -> None:
         print(f"  Could not load model list: {e}")
         return
 
-    import shutil
     models = state.setdefault("models", {})
     state["one_pass"] = None             # two-pane picker is per-category only
 
-    target_idx, focus, cursor, scroll, query = 0, "left", 0, 0, ""
+    def left_rows():
+        return [(lambda focus, cursor, name=t[0]: _left_row(name, cursor, focus), t, True)
+                for t in TARGETS]
 
-    def build():
-        title, cstem, engine = TARGETS[target_idx]
+    def right_rows(target):
+        _, cstem, engine = target
         cur = category_model(engine, state.get("quality", DEFAULT_QUALITY), models)
         entries = _models_for(rows, cstem, engine, cur)
-        if query:
-            q = query.lower()
-            entries = [e for e in entries
-                       if q in e["fn"].lower() or q in short_name(e["fn"]).lower()]
-        return entries, cur
+        for e in entries:
+            e["_engine"] = engine
+        return [(lambda focus, cursor, e=e: _entry_label(e, focus and cursor), e, True)
+                for e in entries]
 
-    with cbreak_noecho():
-        while True:
-            entries, cur = build()
-            cursor = max(0, min(cursor, len(entries) - 1)) if entries else 0
-            term = shutil.get_terminal_size((80, 24))
-            rows_h = _body_h(term, len(entries))
-            if cursor < scroll:
-                scroll = cursor
-            elif cursor >= scroll + rows_h:
-                scroll = cursor - rows_h + 1
-            scroll = max(0, min(scroll, max(0, len(entries) - rows_h)))
+    def on_right_enter(e):
+        eng, fn = e["_engine"], e["fn"]
+        if fn == ENGINE_MODEL.get(eng):
+            models.pop(eng, None)   # back to the built-in default
+        else:
+            models[eng] = fn
 
-            _frame(target_idx, entries, cursor, scroll, query, focus, cur, term)
+    def search_key(e):
+        return f"{e['fn']} {short_name(e['fn'])}"
 
-            key = getch(return_special_keys=True)
-            if key == KEY_ESC:
-                return
-            if key == KEY_TAB:
-                focus = "right" if focus == "left" else "left"
-            elif key == KEY_UP:
-                if focus == "left":
-                    target_idx = max(0, target_idx - 1)
-                    cursor = scroll = 0
-                    query = ""
-                else:
-                    cursor = max(0, cursor - 1)
-            elif key == KEY_DOWN:
-                if focus == "left":
-                    target_idx = min(len(TARGETS) - 1, target_idx + 1)
-                    cursor = scroll = 0
-                    query = ""
-                else:
-                    cursor = min(len(entries) - 1, cursor + 1) if entries else 0
-            elif key == KEY_ENTER:
-                if focus == "left":
-                    focus = "right"
-                elif entries:
-                    _, _, engine = TARGETS[target_idx]
-                    fn = entries[cursor]["fn"]
-                    if fn == ENGINE_MODEL.get(engine):
-                        models.pop(engine, None)   # back to the built-in default
-                    else:
-                        models[engine] = fn
-            elif key == KEY_BACKSPACE:
-                if focus == "right":
-                    query = query[:-1]
-                    cursor = scroll = 0
-            elif key == KEY_SPACE:
-                if focus == "right":
-                    query += " "
-                    cursor = scroll = 0
-            elif isinstance(key, str) and len(key) == 1 and key.isprintable():
-                focus = "right"
-                query += key
-                cursor = scroll = 0
+    pane = TwoPane(
+        title="Choose models", subtitle="(SDR = MVSep where available)",
+        left_header="Target",
+        left_rows=left_rows, right_rows=right_rows,
+        on_right_enter=on_right_enter, right_filterable=True,
+        search_key=search_key,
+    )
+    pane.run()
