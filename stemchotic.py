@@ -8,12 +8,32 @@ Stemchotic entry point.
 """
 
 import argparse
+import os
+import re
 import sys
 
 from src import __version__
 from src.core.engines import CLI_PRESETS, plan_text, resolve, ENGINE_MODEL
 from src.core.model_cache import missing_models, confirm_downloads
 from src.core.separator import run
+
+
+def clean_path(raw: str) -> str:
+    """Normalize a typed or dragged-in path: outer quotes, shell escapes
+    (drag-and-drop pastes 'My\\ Song.flac'), ~. If the result still isn't a
+    file, salvage the last quoted segment that is one (messy paste recovery)."""
+    s = raw.strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in "'\"":
+        s = s[1:-1]
+    if os.name != "nt":
+        s = re.sub(r"\\(.)", r"\1", s)
+    s = os.path.expanduser(s)
+    if not os.path.isfile(s):
+        for quoted in re.findall(r"'([^']+)'|\"([^\"]+)\"", raw):
+            cand = os.path.expanduser(quoted[0] or quoted[1])
+            if os.path.isfile(cand):
+                s = cand
+    return s
 
 
 def list_presets():
@@ -71,7 +91,7 @@ def run_tui():
             continue
 
         do_run(
-            choice["selected"], input_file.strip(),
+            choice["selected"], clean_path(input_file),
             output_format=choice["output_format"],
             models=choice.get("models"), one_pass=choice.get("one_pass"),
         )
@@ -99,7 +119,7 @@ def main(argv=None):
         if args.preset not in CLI_PRESETS:
             print(f"Unknown preset '{args.preset}'. Use --list to see options.")
             return 1
-        return do_run(CLI_PRESETS[args.preset], args.input, assume_yes=args.yes)
+        return do_run(CLI_PRESETS[args.preset], clean_path(args.input), assume_yes=args.yes)
 
     if args.preset and not args.input:
         print("Missing input file. Usage: stemchotic <preset> <file>  (or no args for the picker)")
