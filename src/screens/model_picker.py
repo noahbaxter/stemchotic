@@ -95,6 +95,7 @@ def _models_for(rows, cstem, engine, current):
         return {
             "fn": fn,
             "sdr": sdr_of.get(fn),
+            "arch": arch_of.get(fn, ""),
             "tier": weight_tier(arch_of.get(fn, ""), fn),
             "note": _NOTES.get(fn, ""),
             "current": fn == current,
@@ -102,6 +103,44 @@ def _models_for(rows, cstem, engine, current):
         }
 
     return [entry(fn, True) for fn in pinned_fns] + [entry(fn, False) for fn in ranked]
+
+
+def _family(fn, arch):
+    """Group a model into a coarse architecture family, used to pick one
+    best-SDR champion per family for the collapsed view."""
+    f = fn.lower()
+    if "bs-rofo" in f or "bs_roformer" in f:
+        return "BS-RoFormer"
+    if "melband" in f or "mel_band" in f or "mel-band" in f:
+        return "MelBand-RoFormer"
+    if "mdx23c" in f:
+        return "MDX23C"
+    if "demucs" in f:
+        return "Demucs"
+    if arch == "VR" or f.endswith(".pth"):
+        return "VR"
+    if "mdx" in f or "mdxnet" in f or arch in ("MDX",):
+        return "UVR-MDX"
+    if "kuielab" in f:
+        return "UVR-MDX"
+    return "Other"
+
+
+def _collapsed(rows, cstem, engine, current):
+    """Collapsed right-pane entries: the pinned curated picks plus the single
+    highest-SDR model of each architecture family for this stem (deduped, in
+    SDR-desc order). Reuses _models_for for the full ranked list."""
+    full = _models_for(rows, cstem, engine, current)
+    pinned = [e for e in full if e["pinned"]]
+    rest = [e for e in full if not e["pinned"]]
+    seen, champs = set(), []
+    for e in rest:                      # rest is already SDR-desc sorted
+        fam = _family(e["fn"], e["arch"])
+        if fam in seen:
+            continue
+        seen.add(fam)
+        champs.append(e)
+    return pinned + champs
 
 
 # --- rendering ---
@@ -122,7 +161,7 @@ def _entry_label(e, focused_cursor):
 def _detail(e):
     """Full-width help line for the focused model: friendly name, its note (the
     'why'), and the raw filename, none of it truncated in-column."""
-    if not e:
+    if not isinstance(e, dict):
         return ""
     parts = [f"{Colors.BOLD}{short_name(e['fn'])}{Colors.RESET}"]
     if e["note"]:
@@ -151,28 +190,50 @@ def show_model_overlay(selected: list, state: dict) -> None:
     models = state.setdefault("models", {})
     state["one_pass"] = None             # two-pane picker is per-category only
 
+    view = {"all": False}                # collapsed by default; toggled by the rows below
+    SHOW_ALL = ("show_all",)
+    SHOW_FEWER = ("show_fewer",)
+
     def left_rows():
         return [(lambda focus, cursor, name=t[0]: _left_row(name, cursor, focus), t, True)
                 for t in TARGETS]
 
-    def right_rows(target):
+    def _entry_row(e, engine):
+        e["_engine"] = engine
+        return (lambda focus, cursor, e=e: _entry_label(e, focus and cursor), e, True)
+
+    def right_rows(target, query):
         _, cstem, engine = target
         cur = category_model(engine, state.get("quality", DEFAULT_QUALITY), models)
-        entries = _models_for(rows, cstem, engine, cur)
-        for e in entries:
-            e["_engine"] = engine
-        return [(lambda focus, cursor, e=e: _entry_label(e, focus and cursor), e, True)
-                for e in entries]
+        full = _models_for(rows, cstem, engine, cur)
+        n = len(full)
+        if query:
+            # Searching always hits the full catalogue; the widget filters it. No toggle.
+            return [_entry_row(e, engine) for e in full]
+        if view["all"]:
+            toggle = (lambda f, c: f"{Colors.MUTED}Show top picks only{Colors.RESET}", SHOW_FEWER, True)
+            return [toggle] + [_entry_row(e, engine) for e in full]
+        entries = _collapsed(rows, cstem, engine, cur)
+        toggle = (lambda f, c: f"{Colors.MUTED}Show all {n} models{Colors.RESET}", SHOW_ALL, True)
+        return [_entry_row(e, engine) for e in entries] + [toggle]
 
-    def on_right_enter(e):
-        eng, fn = e["_engine"], e["fn"]
+    def on_right_enter(val):
+        if val == SHOW_ALL:
+            view["all"] = True
+            return
+        if val == SHOW_FEWER:
+            view["all"] = False
+            return
+        eng, fn = val["_engine"], val["fn"]
         if fn == ENGINE_MODEL.get(eng):
             models.pop(eng, None)   # back to the built-in default
         else:
             models[eng] = fn
 
-    def search_key(e):
-        return f"{e['fn']} {short_name(e['fn'])}"
+    def search_key(val):
+        if not isinstance(val, dict):
+            return ""
+        return f"{val['fn']} {short_name(val['fn'])}"
 
     pane = TwoPane(
         title="Choose models", subtitle="(SDR = MVSep where available)",

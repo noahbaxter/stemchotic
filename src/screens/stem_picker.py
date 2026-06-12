@@ -122,7 +122,7 @@ def _build_pane(state: dict) -> TwoPane:
             selected.discard(name) if name in selected else selected.add(name)
 
     # --- right pane: settings ---
-    def right_rows(_left):
+    def right_rows(_left, _query=""):
         rows = [
             (_header("Output"), SECTION, False),
             (_set_render("Format", state["output_format"]), SET_FORMAT, True),
