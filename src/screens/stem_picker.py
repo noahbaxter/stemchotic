@@ -25,8 +25,6 @@ QUALITIES = ["best", "fast"]
 KIT_SPLITS = ["off", "4", "5", "6"]
 KIT_SOURCES = ["song", "stem"]
 _QUALITY_LABEL = {"best": "Best", "fast": "Fast"}
-_SCOPE_LABEL = {False: "My picks", True: "Everything the models make"}
-_SPLIT_LABEL = {"off": "Off", "4": "4-piece", "5": "5-piece", "6": "6-piece"}
 _SOURCE_LABEL = {"song": "Full song", "stem": "Drum stem"}
 
 # Right-pane row values.
@@ -121,19 +119,20 @@ def _build_pane(state: dict) -> TwoPane:
             name = val[1]
             selected.discard(name) if name in selected else selected.add(name)
 
-    # --- right pane: settings ---
+    # --- right pane: settings (each row shows its options inline, active one lit) ---
     def right_rows(_left, _query=""):
+        scope = "Everything" if state["keep_all"] else "My picks"
+        split = "Off" if state["kit_split"] == "off" else state["kit_split"]
         rows = [
-            (_header("Output"), SECTION, False),
-            (_set_render("Format", state["output_format"]), SET_FORMAT, True),
-            (_set_render("Quality", _QUALITY_LABEL[quality]), SET_QUALITY, True),
-            (_set_render("Scope", _SCOPE_LABEL[state["keep_all"]]), SET_SCOPE, True),
+            (_opt_render("Format", FORMATS, state["output_format"]), SET_FORMAT, True),
+            (_opt_render("Quality", ["Best", "Fast"], _QUALITY_LABEL[quality]), SET_QUALITY, True),
+            (_opt_render("Scope", ["My picks", "Everything"], scope), SET_SCOPE, True),
         ]
         if "Drums" in selected:
             rows += [
-                (_header("Drum kit"), SECTION, False),
-                (_set_render("Split", _SPLIT_LABEL[state["kit_split"]]), SET_SPLIT, True),
-                (_set_render("Source", _SOURCE_LABEL[state["kit_source"]]), SET_SOURCE, True),
+                (lambda f, c: "", SECTION, False),   # blank spacer, no dashes
+                (_opt_render("Split", ["Off", "4", "5", "6"], split), SET_SPLIT, True),
+                (_opt_render("Source", ["Full song", "Drum stem"], _SOURCE_LABEL[state["kit_source"]]), SET_SOURCE, True),
             ]
         return rows
 
@@ -155,7 +154,7 @@ def _build_pane(state: dict) -> TwoPane:
                          state["kit_split"], state["kit_source"],
                          state["residual"] and not state["keep_all"])
         keys = (f"  {Colors.PRIMARY}Tab{Colors.MUTED} panes  "
-                f"{Colors.PRIMARY}Space{Colors.MUTED} toggle/cycle  "
+                f"{Colors.PRIMARY}Space{Colors.MUTED} pick/change  "
                 f"{Colors.PRIMARY}M{Colors.MUTED} models  "
                 f"{Colors.PRIMARY}S{Colors.MUTED} start splitting  "
                 f"{Colors.PRIMARY}Esc{Colors.MUTED} quit{Colors.RESET}")
@@ -207,12 +206,11 @@ def _residual_render(state):
     return render
 
 
-def _header(text):
-    return lambda f, c: f"{Colors.BOLD}-- {text} --{Colors.RESET}"
-
-
-def _set_render(label, value):
+def _opt_render(label, options, current):
+    """A setting row: label, then every option inline with the active one lit
+    (accent + bold) and the rest muted. Enter/Space advances to the next."""
     def render(focus, cursor):
-        return (f"{Colors.MUTED}{label}:{Colors.RESET} {value}"
-                f"  {Colors.DIM}(Space cycles){Colors.RESET}")
+        segs = [(f"{Colors.PRIMARY}{Colors.BOLD}{o}{Colors.RESET}" if o == current
+                 else f"{Colors.MUTED}{o}{Colors.RESET}") for o in options]
+        return f"{Colors.DIM}{label:<8}{Colors.RESET}" + "  ".join(segs)
     return render
