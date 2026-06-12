@@ -11,7 +11,7 @@ import logging
 import os
 from pathlib import Path
 
-from .engines import Pass, resolve, short_name, ENGINE_MODEL
+from .engines import Pass, resolve, short_name, category_model, DEFAULT_QUALITY
 from .progress import capture_tqdm
 from .registry import CUSTOM_MODELS, download_custom, ensure_registry
 
@@ -152,6 +152,7 @@ def run(
     models: dict | None = None,
     one_pass: str | None = None,
     progress=_noop,
+    quality: str = DEFAULT_QUALITY,
 ) -> list[str]:
     """
     Separate `input_file` according to the selected stems. Output files are
@@ -165,12 +166,12 @@ def run(
         raise RuntimeError(f"File not found: {input_file}")
     out_dir = os.path.dirname(input_file) or os.getcwd()
 
-    passes = resolve(selected, models, one_pass)
+    passes = resolve(selected, models, one_pass, quality)
     if not passes:
         raise RuntimeError("Nothing selected.")
 
     base = Path(input_file).stem
-    rhythm_model = (models or {}).get("rhythm", ENGINE_MODEL["rhythm"])
+    rhythm_model = category_model("rhythm", quality, models)
 
     # Custom models aren't in audio-separator's repos; fetch them ourselves.
     needed = [p.model for p in passes]

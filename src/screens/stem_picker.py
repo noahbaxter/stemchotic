@@ -12,14 +12,17 @@ closes.
 """
 
 from chotic_ui import Colors, Menu, MenuItem, MenuDivider
-from ..core.engines import STEM_OPTIONS, plan_text, display_model, short_name
+from ..core.engines import STEM_OPTIONS, plan_text, display_model, short_name, DEFAULT_QUALITY
 from .model_picker import show_model_overlay
 
 
 ACTION_SEPARATE = ("action", "separate")
 ACTION_FORMAT = ("action", "format")
 ACTION_MODEL = ("action", "model")
+ACTION_QUALITY = ("action", "quality")
 FORMATS = ["WAV", "FLAC", "MP3"]
+QUALITIES = ["best", "fast"]
+_QUALITY_LABEL = {"best": "Best", "fast": "Fast"}
 
 
 def _layout():
@@ -40,7 +43,8 @@ def _layout():
 
 def new_state() -> dict:
     """Fresh, session-long picker state."""
-    return {"selected": set(), "output_format": "WAV", "idx": 0, "models": {}, "one_pass": None}
+    return {"selected": set(), "output_format": "WAV", "idx": 0, "models": {},
+            "one_pass": None, "quality": DEFAULT_QUALITY}
 
 
 def show_stem_picker(state: dict) -> dict | None:
@@ -53,6 +57,7 @@ def show_stem_picker(state: dict) -> dict | None:
         output_format = state["output_format"]
         models = state.setdefault("models", {})
         one_pass = state.get("one_pass")
+        quality = state.setdefault("quality", DEFAULT_QUALITY)
         menu = Menu(
             title="Pick your stems",
             subtitle="Space to pick stems  ·  Tab to choose models  ·  Start splitting to run",
@@ -69,7 +74,7 @@ def show_stem_picker(state: dict) -> dict | None:
                 mark = f"{Colors.SUCCESS}●{Colors.RESET}" if on else f"{Colors.MUTED}○{Colors.RESET}"
                 name_col = Colors.SUCCESS if on else Colors.MUTED
                 prefix = f"   {Colors.DIM}{connector}{Colors.RESET} " if connector else ""
-                shown = short_name(one_pass) if one_pass else display_model(opt.name, models)
+                shown = short_name(one_pass) if one_pass else display_model(opt.name, models, quality)
                 m.add_item(MenuItem(label=f"{prefix}{mark} {name_col}{opt.name}{Colors.RESET}",
                                     value=("stem", opt.name),
                                     description=shown))
@@ -80,6 +85,9 @@ def show_stem_picker(state: dict) -> dict | None:
                 label=f"{Colors.MUTED}Output format:{Colors.RESET} {output_format}  {Colors.DIM}(Enter cycles){Colors.RESET}",
                 value=ACTION_FORMAT, pinned=True))
             m.add_item(MenuItem(
+                label=f"{Colors.MUTED}Quality:{Colors.RESET} {_QUALITY_LABEL[quality]}  {Colors.DIM}(Enter cycles){Colors.RESET}",
+                value=ACTION_QUALITY, pinned=True))
+            m.add_item(MenuItem(
                 label=f"{Colors.MUTED}Choose models{Colors.RESET}  {Colors.DIM}(Tab){Colors.RESET}",
                 hotkey="M", value=ACTION_MODEL, pinned=True))
             m.add_item(MenuDivider(pinned=True))
@@ -87,7 +95,8 @@ def show_stem_picker(state: dict) -> dict | None:
                 label=f"{Colors.PRIMARY}Start splitting{Colors.RESET}  {Colors.DIM}→ choose audio file{Colors.RESET}",
                 value=ACTION_SEPARATE, pinned=True))
 
-            m.status_line = f"{plan_text(list(selected), models, one_pass)}    |    format: {output_format}"
+            m.status_line = (f"{plan_text(list(selected), models, one_pass, quality)}"
+                             f"    |    format: {output_format}  ·  quality: {_QUALITY_LABEL[quality]}")
 
         menu.rebuild = build
         build(menu)
@@ -115,11 +124,17 @@ def show_stem_picker(state: dict) -> dict | None:
             state["output_format"] = FORMATS[(i + 1) % len(FORMATS)]
             continue
 
+        if val == ACTION_QUALITY:
+            i = QUALITIES.index(quality) if quality in QUALITIES else 0
+            state["quality"] = QUALITIES[(i + 1) % len(QUALITIES)]
+            continue
+
         if val == ACTION_SEPARATE:
             if not selected:
                 continue
             return {"selected": list(selected), "output_format": output_format,
-                    "models": dict(models), "one_pass": state.get("one_pass")}
+                    "models": dict(models), "one_pass": state.get("one_pass"),
+                    "quality": quality}
 
         if isinstance(val, tuple) and val[0] == "stem":
             # Enter and Space both just toggle; splitting only starts via Start splitting.

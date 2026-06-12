@@ -16,7 +16,8 @@ import sys
 from chotic_ui import Colors, getch, print_header, visible_len, pad_to
 from chotic_ui.primitives import cbreak_noecho, KEY_UP, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_TAB, KEY_BACKSPACE, KEY_SPACE
 from chotic_ui.components import box_row, BOX_TL, BOX_TR, BOX_BL, BOX_BR, BOX_H, BOX_V, BOX_TL_DIV, BOX_TR_DIV
-from ..core.engines import CONFIG, ENGINE_MODEL, MODEL_SHORT, _NAME_TO_ENGINE, short_name, weight_tier
+from ..core.engines import (CONFIG, ENGINE_MODEL, MODEL_SHORT, MVSEP_SDR, _NAME_TO_ENGINE,
+                            category_model, short_name, weight_tier, DEFAULT_QUALITY)
 
 _SDR_NUM = re.compile(r"\(([\d.]+)\)")
 _TIER_COLOR = {"fast": Colors.SUCCESS, "avg": Colors.MUTED, "slow": Colors.ERROR}
@@ -86,7 +87,14 @@ def _models_for(rows, cstem, engine, current):
             continue
         pinned_fns.append(fn)
 
-    sdr_of = {fn: sdrs.get(cstem) for fn, _, sdrs in rows if cstem in sdrs}
+    # Prefer the consistent MVSep SDR where we have it; else the catalogue value.
+    sdr_of = {}
+    for fn, _, sdrs in rows:
+        mv = MVSEP_SDR.get(fn, {}).get(cstem)
+        if mv is not None:
+            sdr_of[fn] = mv
+        elif cstem in sdrs:
+            sdr_of[fn] = sdrs.get(cstem)
     arch_of = {fn: arch for fn, arch, _ in rows}
 
     ranked = [fn for fn in sdr_of if fn not in pinned_fns]
@@ -138,7 +146,7 @@ def _frame(target_idx, entries, cursor, scroll, query, focus, cur_fn, term):
     def two(left, right):
         row(f"{pad_to(left, left_w)} {Colors.DIM}{BOX_V}{Colors.RESET} {pad_to(right, right_w)}")
 
-    row(f"{Colors.BOLD}Choose models{Colors.RESET}")
+    row(f"{Colors.BOLD}Choose models{Colors.RESET}  {Colors.MUTED}(SDR = MVSep where available){Colors.RESET}")
     lines.append(box_row(BOX_TL_DIV, BOX_H, BOX_TR_DIV, w, c))
 
     n = len(entries)
@@ -202,7 +210,7 @@ def show_model_overlay(selected: list, state: dict) -> None:
 
     def build():
         title, cstem, engine = TARGETS[target_idx]
-        cur = models.get(engine, ENGINE_MODEL[engine])
+        cur = category_model(engine, state.get("quality", DEFAULT_QUALITY), models)
         entries = _models_for(rows, cstem, engine, cur)
         if query:
             q = query.lower()

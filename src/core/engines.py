@@ -17,8 +17,11 @@ _CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "models.json"
 with open(_CONFIG_PATH, encoding="utf-8") as _f:
     CONFIG = json.load(_f)
 
-ENGINE_MODEL = CONFIG["category_defaults"]   # category -> default model filename
+ENGINE_MODEL = CONFIG["category_defaults"]   # category -> fallback model filename
 MODEL_SHORT = CONFIG["names"]                # model filename -> friendly short name
+QUALITY_TIERS = CONFIG["quality_tiers"]      # quality -> {category: model filename}
+DEFAULT_QUALITY = CONFIG.get("default_quality", "best")
+MVSEP_SDR = CONFIG.get("mvsep_sdr", {})      # model filename -> {stem: mvsep sdr}
 
 
 @dataclass(frozen=True)
@@ -95,16 +98,28 @@ def weight_tier(arch: str, filename: str) -> str:
     return "avg"                            # MDX23C, Demucs, unknown
 
 
-def model_for(stem: str, models: dict | None = None) -> str:
-    """The model filename a stem uses, honoring per-category overrides."""
+def category_model(cat: str, quality: str = DEFAULT_QUALITY, models: dict | None = None) -> str:
+    """The model filename for a category: explicit user override first, then the
+    quality tier's pick, then the built-in fallback."""
+    override = (models or {}).get(cat)
+    if override:
+        return override
+    tier = QUALITY_TIERS.get(quality, {}).get(cat)
+    if tier:
+        return tier
+    return ENGINE_MODEL[cat]
+
+
+def model_for(stem: str, models: dict | None = None, quality: str = DEFAULT_QUALITY) -> str:
+    """The model filename a stem uses, honoring per-category overrides + quality."""
     if stem in _STEM_MODEL:          # kit options carry their own model
         return _STEM_MODEL[stem]
     cat = _NAME_TO_ENGINE.get(stem, "")
-    return (models or {}).get(cat, ENGINE_MODEL.get(cat, ""))
+    return category_model(cat, quality, models)
 
 
-def display_model(stem: str, models: dict | None = None) -> str:
-    return short_name(model_for(stem, models))
+def display_model(stem: str, models: dict | None = None, quality: str = DEFAULT_QUALITY) -> str:
+    return short_name(model_for(stem, models, quality))
 
 
 @dataclass
@@ -118,12 +133,17 @@ class Pass:
     merge: dict | None = None       # kit: group output pieces post-split
 
 
-def resolve(selected: list[str], models: dict | None = None, one_pass: str | None = None) -> list[Pass]:
+def resolve(selected: list[str], models: dict | None = None, one_pass: str | None = None,
+            quality: str = DEFAULT_QUALITY) -> list[Pass]:
     """Concrete passes for a selection.
 
     `models`: per-category model overrides {category: filename}.
     `one_pass`: a single model to run for the whole selection (cross-category),
     filtered to the selected stems.
+    `quality`: session quality tier picking each category's model.
+
+    Non-kit passes that resolve to the SAME model file are merged into one pass
+    (e.g. on Best, rhythm + extra both map to RoFormer SW -> a single pass).
     """
     if one_pass:
         single = selected[0] if len(selected) == 1 else None
@@ -142,15 +162,28 @@ def resolve(selected: list[str], models: dict | None = None, one_pass: str | Non
 
     passes: list[Pass] = []
     for engine, stems in by_engine.items():
-        model = (models or {}).get(engine, ENGINE_MODEL[engine])
-        p = Pass(engine=engine, model=model, stems=stems)
-        if len(stems) == 1:
-            p.single_stem = stems[0]       # write just the one file
-        passes.append(p)
-    return passes + kit_passes
+        model = category_model(engine, quality, models)
+        passes.append(Pass(engine=engine, model=model, stems=list(stems)))
+
+    # Merge passes sharing a model file into one (union stems, keep first engine).
+    merged: dict[str, Pass] = {}
+    order: list[str] = []
+    for p in passes:
+        if p.model in merged:
+            merged[p.model].stems.extend(p.stems)
+        else:
+            merged[p.model] = p
+            order.append(p.model)
+    out: list[Pass] = []
+    for model in order:
+        p = merged[model]
+        p.single_stem = p.stems[0] if len(p.stems) == 1 else None
+        out.append(p)
+    return out + kit_passes
 
 
-def plan_text(selected: list[str], models: dict | None = None, one_pass: str | None = None) -> str:
+def plan_text(selected: list[str], models: dict | None = None, one_pass: str | None = None,
+              quality: str = DEFAULT_QUALITY) -> str:
     """One-line description of what the current selection will run."""
     if not selected:
         return "Nothing selected - pick stems with Space, then Start splitting."
@@ -159,7 +192,7 @@ def plan_text(selected: list[str], models: dict | None = None, one_pass: str | N
         return f"1 pass: {short_name(one_pass)} -> {', '.join(selected)} (one model)"
 
     parts = []
-    for p in resolve(selected, models):
+    for p in resolve(selected, models, quality=quality):
         label = short_name(p.model)
         if p.cascade_drums:
             parts.append(f"drums -> {label} (full kit)")
