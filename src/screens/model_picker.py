@@ -170,5 +170,6 @@ def show_model_overlay(selected: list, state: dict) -> None:
         left_rows=left_rows, right_rows=right_rows,
         on_right_enter=on_right_enter, right_filterable=True,
         search_key=search_key,
+        cursor_style="highlight", header_style="bold",
     )
     pane.run()
