@@ -11,7 +11,8 @@ import logging
 import os
 from pathlib import Path
 
-from .engines import Pass, resolve, ENGINE_MODEL
+from .engines import Pass, resolve, short_name, ENGINE_MODEL
+from .progress import capture_tqdm
 
 
 def _pretty(stem: str) -> str:
@@ -66,11 +67,14 @@ def _make_separator(output_dir=None, single_stem=None, output_format="WAV"):
     )
 
 
-def _separate(separator, model: str, input_file: str, names: dict | None = None) -> list[str]:
+def _separate(separator, model: str, input_file: str, names: dict | None = None,
+              label: str = "") -> list[str]:
     """Run one model pass; return absolute output paths. `names` sets the output
-    filenames explicitly (audio-separator custom_output_names)."""
-    separator.load_model(model_filename=model)
-    out = separator.separate(input_file, names) if names else separator.separate(input_file)
+    filenames explicitly (audio-separator custom_output_names). `label` titles
+    the in-place progress line that replaces tqdm's stderr bars."""
+    with capture_tqdm(label or short_name(model)):
+        separator.load_model(model_filename=model)
+        out = separator.separate(input_file, names) if names else separator.separate(input_file)
     return [n if os.path.isabs(n) else os.path.join(separator.output_dir, n) for n in out]
 
 
@@ -158,16 +162,18 @@ def run(
             drums_path = next((r for r in results if Path(r).stem.endswith("[Drums]")), None)
             reused = drums_path is not None
             if not reused:
-                progress(f"[{i}/{total}] Extracting drums ({rhythm_model})...")
+                progress(f"[{i}/{total}] Extracting drums ({short_name(rhythm_model)})...")
                 drums = _separate(
                     _make_separator(out_dir, single_stem="Drums"),
                     rhythm_model, input_file,
+                    label=f"[{i}/{total}] {short_name(rhythm_model)} -> Drums",
                 )
                 drums_path = drums[0]
-            progress(f"[{i}/{total}] Splitting kit ({p.model})...")
+            progress(f"[{i}/{total}] Splitting kit ({short_name(p.model)})...")
             outs = _separate(
                 _make_separator(out_dir, output_format=output_format),
                 p.model, drums_path, _names(base, p.pieces or []),
+                label=f"[{i}/{total}] Splitting kit",
             )
             if not reused:
                 try:
@@ -176,11 +182,12 @@ def run(
                     pass
             results += _merge_pieces(outs, p.merge, base, output_format) if p.merge else outs
         else:
-            label = p.single_stem or ", ".join(p.stems) or p.model
-            progress(f"[{i}/{total}] {p.model} -> {label} (this is the slow part)...")
+            label = p.single_stem or ", ".join(p.stems) or short_name(p.model)
+            progress(f"[{i}/{total}] {short_name(p.model)} -> {label} (this is the slow part)...")
             keep = [p.single_stem] if p.single_stem else p.stems
             sep = _make_separator(out_dir, single_stem=p.single_stem, output_format=output_format)
-            outs = _separate(sep, p.model, input_file, _names(base, keep))
+            outs = _separate(sep, p.model, input_file, _names(base, keep),
+                             label=f"[{i}/{total}] {short_name(p.model)} -> {label}")
             if p.single_stem or not p.stems:
                 results += outs            # already exactly what was asked
             else:
