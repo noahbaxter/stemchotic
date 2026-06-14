@@ -123,6 +123,14 @@ def build_host_command(wezterm: str, lua: str, cwd: str, launcher_path: str, for
     ]
 
 
+def host_paths() -> tuple[Path, Path]:
+    """(wezterm-gui, wezterm.lua) locations inside the bundle, relative to the
+    launcher executable: both binaries sit in Contents/MacOS, the config in
+    Contents/Resources."""
+    exe_dir = Path(sys.executable).parent
+    return exe_dir / "wezterm-gui", exe_dir.parent / "Resources" / "wezterm.lua"
+
+
 def get_app_dir() -> Path:
     """Get the extracted app directory. Dev channel uses separate dir to coexist with production."""
     subdir = "_app_dev" if RELEASE_TAG else "_app"
@@ -793,6 +801,14 @@ def clean_install():
 
 
 def main():
+    wezterm, lua = host_paths()
+    if should_relaunch_in_host(sys.argv, _has_terminal(), wezterm.exists()):
+        cmd = build_host_command(
+            str(wezterm), str(lua), str(get_launcher_dir()),
+            str(get_launcher_path()), sys.argv[1:],
+        )
+        os.execv(str(wezterm), cmd)  # replaces this process; does not return
+
     set_terminal_size(90, 40)
     init_logging()
     log(f"Launcher v{LAUNCHER_VERSION}")
@@ -882,7 +898,7 @@ def main():
         error_exit(f"App entry not found after installation:\n{app_entry}")
     log("Launching stemchotic")
     print("\nLaunching stemchotic...\n" + "=" * 40 + "\n")
-    launcher_flags = {"--offline", "--dev", "--clean", "--setup"}
+    launcher_flags = {"--offline", "--dev", "--clean", "--setup", "--hosted"}
     launcher_opts = {"--test-release"}  # These consume the next arg too
     filtered_args = []
     skip_next = False
