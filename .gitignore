@@ -10,3 +10,7 @@ models/
 
 # OS
 .DS_Store
+
+# Local native build output
+/build/
+/dist/
