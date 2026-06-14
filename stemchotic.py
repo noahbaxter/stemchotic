@@ -131,6 +131,8 @@ def run_tui():
 
 
 def main(argv=None):
+    from chotic_ui import bootstrap
+    bootstrap("Stemchotic")
     parser = argparse.ArgumentParser(prog="stemchotic", description="Easy stem separation.")
     parser.add_argument("preset", nargs="?", help="Preset key (see --list), or the input file")
     parser.add_argument("input", nargs="?", help="Input audio file")
