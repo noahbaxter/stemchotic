@@ -112,7 +112,7 @@ def should_relaunch_in_host(argv, has_terminal: bool, wezterm_exists: bool) -> b
     return "--hosted" not in argv and not has_terminal and wezterm_exists
 
 
-def build_host_command(wezterm: str, lua: str, cwd: str, launcher_path: str, forward_args) -> list:
+def build_host_command(wezterm: str, lua: str, cwd: str, launcher_path: str, forward_args: list) -> list:
     """The argv to launch the bundled WezTerm GUI running this launcher as its
     program, in a dedicated process, with our config, forwarding the original
     args and appending the `--hosted` sentinel."""
@@ -125,8 +125,8 @@ def build_host_command(wezterm: str, lua: str, cwd: str, launcher_path: str, for
 
 def host_paths() -> tuple[Path, Path]:
     """(wezterm-gui, wezterm.lua) locations inside the bundle, relative to the
-    launcher executable: both binaries sit in Contents/MacOS, the config in
-    Contents/Resources."""
+    launcher executable: wezterm-gui sits in Contents/MacOS beside the launcher,
+    the config in Contents/Resources."""
     exe_dir = Path(sys.executable).parent
     return exe_dir / "wezterm-gui", exe_dir.parent / "Resources" / "wezterm.lua"
 

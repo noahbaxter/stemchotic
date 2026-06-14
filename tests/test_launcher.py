@@ -26,3 +26,14 @@ def test_build_host_command_shape():
         "start", "--always-new-process", "--cwd", "/work",
         "--", "/A/stemchotic-launcher", "--offline", "--hosted",
     ]
+
+
+def test_build_host_command_with_no_forward_args():
+    cmd = launcher.build_host_command(
+        "/A/wezterm-gui", "/A/wezterm.lua", "/work", "/A/stemchotic-launcher", []
+    )
+    assert cmd == [
+        "/A/wezterm-gui", "--config-file", "/A/wezterm.lua",
+        "start", "--always-new-process", "--cwd", "/work",
+        "--", "/A/stemchotic-launcher", "--hosted",
+    ]
