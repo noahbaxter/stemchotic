@@ -104,6 +104,25 @@ def get_launcher_path() -> Path:
     return Path(__file__)
 
 
+def should_relaunch_in_host(argv, has_terminal: bool, wezterm_exists: bool) -> bool:
+    """True when we should re-exec into the bundled WezTerm host: a Finder
+    double-click (no controlling terminal), not already hosted, and the WezTerm
+    binary is present beside us. The `--hosted` sentinel is our own recursion
+    guard (the hosted copy runs with a tty inside WezTerm)."""
+    return "--hosted" not in argv and not has_terminal and wezterm_exists
+
+
+def build_host_command(wezterm: str, lua: str, cwd: str, launcher_path: str, forward_args) -> list:
+    """The argv to launch the bundled WezTerm GUI running this launcher as its
+    program, in a dedicated process, with our config, forwarding the original
+    args and appending the `--hosted` sentinel."""
+    return [
+        wezterm, "--config-file", lua,
+        "start", "--always-new-process", "--cwd", cwd,
+        "--", launcher_path, *forward_args, "--hosted",
+    ]
+
+
 def get_app_dir() -> Path:
     """Get the extracted app directory. Dev channel uses separate dir to coexist with production."""
     subdir = "_app_dev" if RELEASE_TAG else "_app"
