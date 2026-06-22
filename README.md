@@ -24,15 +24,17 @@ place; Windows/Linux smoke tests pending.
 
 ## Install
 
-Grab the launcher for your OS from
+Grab the build for your OS from
 [GitHub Releases](https://github.com/noahbaxter/stemchotic/releases/latest):
 
-- `stemchotic-launcher-macos`
-- `stemchotic-launcher.exe`
-- `stemchotic-launcher-linux`
+- macOS: `Stemchotic.dmg` (open it and drag Stemchotic to Applications)
+- Windows: `stemchotic-launcher.exe`
+- Linux: `stemchotic-launcher-linux`
 
-Put it in a folder you like and run it. Everything it installs goes into a
-`.stemchotic/` folder next to it, so nothing lands in system directories.
+On Windows and Linux, put the launcher in a folder you like and run it. On
+macOS, launch Stemchotic from Applications. Everything it installs goes into
+the standard per-user app directories for your OS (on macOS, `~/Library`), so
+nothing lands in system directories.
 
 **First run:** the launcher checks for the latest release, downloads the app,
 then asks one consent question before installing Python and the audio

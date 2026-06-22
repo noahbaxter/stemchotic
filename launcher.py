@@ -6,8 +6,7 @@ Tiny launcher that fetches the app source from GitHub releases and runs it
 in a uv-managed Python environment.
 - Checks for updates on every launch
 - Downloads and extracts new versions automatically
-- Provisions Python + dependencies under .stemchotic/ on first run
-- Handles directory changes (prompts to move/delete old data)
+- Provisions Python + dependencies in the OS-standard per-user app dirs on first run
 """
 
 import json
@@ -24,7 +23,7 @@ from typing import NoReturn
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-LAUNCHER_VERSION = "1.0"
+LAUNCHER_VERSION = "0.9.0"
 RELEASE_TAG = ""  # Injected to "dev-latest" for dev launcher builds
 PYTHON_VERSION = "3.12"
 UV_VERSION = "0.7.13"
@@ -396,7 +395,7 @@ def download_with_progress(url: str, dest: Path):
 # --- Extraction ---
 
 def extract_app(zip_path: Path, version: str):
-    """Extract app zip to .stemchotic/_app/ atomically."""
+    """Extract app zip to the app dir atomically."""
     app_dir = get_app_dir()
     temp_dir = app_dir.parent / "_app_temp"
     old_dir = app_dir.parent / "_app_old"
