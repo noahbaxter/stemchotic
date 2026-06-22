@@ -27,6 +27,7 @@ LAUNCHER_VERSION = "0.9.0"
 RELEASE_TAG = ""  # Injected to "dev-latest" for dev launcher builds
 PYTHON_VERSION = "3.12"
 UV_VERSION = "0.7.13"
+WEZTERM_VERSION = "20240203-110809-5046fc22"  # Windows host, downloaded first-run
 
 
 def get_ssl_context():
@@ -123,11 +124,171 @@ def build_host_command(wezterm: str, lua: str, cwd: str, launcher_path: str, for
 
 
 def host_paths() -> tuple[Path, Path]:
-    """(wezterm-gui, wezterm.lua) locations inside the bundle, relative to the
-    launcher executable: wezterm-gui sits in Contents/MacOS beside the launcher,
-    the config in Contents/Resources."""
+    """(wezterm-gui, wezterm.lua) for the platform's WezTerm host.
+
+    macOS: inside the .app bundle (wezterm-gui in Contents/MacOS beside the
+    launcher, the config in Contents/Resources). Windows: the cache dir WezTerm
+    is downloaded into on first run."""
+    if sys.platform == "win32":
+        d = wezterm_dir()
+        return d / "wezterm-gui.exe", d / "wezterm.lua"
     exe_dir = Path(sys.executable).parent
     return exe_dir / "wezterm-gui", exe_dir.parent / "Resources" / "wezterm.lua"
+
+
+def wezterm_dir() -> Path:
+    """Cache dir for the first-run-downloaded Windows WezTerm."""
+    return get_root_dir() / "wezterm"
+
+
+def _resource_path(name: str) -> "Path | None":
+    """Locate a data file bundled into the frozen exe (PyInstaller --add-data),
+    falling back to the source tree for dev runs."""
+    candidates = []
+    meipass = getattr(sys, "_MEIPASS", "")
+    if meipass:
+        candidates.append(Path(meipass) / name)
+    here = Path(__file__).parent / "packaging"
+    candidates += [here / "macos" / name, here / "windows" / name, here / "linux" / name]
+    return next((c for c in candidates if c.exists()), None)
+
+
+def _double_clicked_windows() -> bool:
+    """True when launched by an Explorer double-click (we are the only process
+    attached to our console). False when launched from an existing shell
+    (cmd/PowerShell/Windows Terminal), so we leave the user's terminal alone."""
+    try:
+        import ctypes
+
+        arr = (ctypes.c_uint32 * 8)()
+        n = ctypes.windll.kernel32.GetConsoleProcessList(arr, 8)
+        return n <= 1
+    except Exception:
+        return False
+
+
+def _hide_windows_console():
+    """Hide our own console window (used when re-execing into WezTerm with the
+    WezTerm binary already cached, to avoid a console flash)."""
+    try:
+        import ctypes
+
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if hwnd:
+            ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
+    except Exception:
+        pass
+
+
+def ensure_wezterm_windows() -> bool:
+    """Download + cache the Windows WezTerm portable build on first run, and make
+    sure wezterm.lua sits beside it. Returns True once wezterm-gui.exe is ready."""
+    d = wezterm_dir()
+    gui = d / "wezterm-gui.exe"
+    lua = d / "wezterm.lua"
+    d.mkdir(parents=True, exist_ok=True)
+    lua_src = _resource_path("wezterm.lua")
+    if lua_src and not lua.exists():
+        shutil.copyfile(lua_src, lua)
+    if gui.exists():
+        return True
+    url = (f"https://github.com/wezterm/wezterm/releases/download/"
+           f"{WEZTERM_VERSION}/WezTerm-windows-{WEZTERM_VERSION}.zip")
+    print("  Fetching WezTerm (terminal window, ~25MB, first run only)...")
+    log(f"Downloading WezTerm: {url}")
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "wezterm.zip"
+            download_with_progress(url, archive)
+            with zipfile.ZipFile(archive) as zf:
+                zf.extractall(tmp)
+            found = list(Path(tmp).rglob("wezterm-gui.exe"))
+            if not found:
+                log("WezTerm archive missing wezterm-gui.exe")
+                return False
+            src_dir = found[0].parent
+            for item in src_dir.iterdir():
+                dest = d / item.name
+                if item.is_dir():
+                    shutil.copytree(item, dest, dirs_exist_ok=True)
+                else:
+                    shutil.copyfile(item, dest)
+        return gui.exists()
+    except Exception as e:
+        log(f"WezTerm download failed: {e}")
+        return False
+
+
+def maybe_relaunch_in_host():
+    """Re-exec into a WezTerm window when launched from a GUI, so the TUI gets a
+    branded terminal.
+
+    macOS: a Finder double-click has no tty; WezTerm ships in the .app bundle.
+    Windows: an Explorer double-click owns its console; WezTerm is downloaded
+    first-run (progress shown in that console). Launches from an existing
+    terminal are left alone on both. Linux uses the native terminal via the
+    installed .desktop entry, so it never hosts here.
+    """
+    if "--hosted" in sys.argv:
+        return
+    if sys.platform == "darwin":
+        wezterm, lua = host_paths()
+        if not should_relaunch_in_host(sys.argv, _has_terminal(), wezterm.exists()):
+            return
+    elif sys.platform == "win32":
+        if not _double_clicked_windows():
+            return
+        wezterm, lua = host_paths()
+        if wezterm.exists():
+            _hide_windows_console()  # cached: skip the console flash
+        if not ensure_wezterm_windows():
+            return  # download failed: fall through and run inline in this console
+    else:
+        return
+
+    cmd = build_host_command(
+        str(wezterm), str(lua), str(get_launcher_dir()),
+        str(get_launcher_path()), sys.argv[1:],
+    )
+    if sys.platform == "win32":
+        DETACHED_PROCESS = 0x00000008
+        subprocess.Popen(cmd, creationflags=DETACHED_PROCESS, close_fds=True)
+        sys.exit(0)
+    os.execv(str(wezterm), cmd)  # replaces this process; does not return
+
+
+def ensure_linux_desktop():
+    """Install a .desktop entry + icon so Stemchotic appears in the app menu and
+    a menu/double-click launch opens it in the user's terminal (Terminal=true)."""
+    if not sys.platform.startswith("linux"):
+        return
+    try:
+        apps = Path.home() / ".local" / "share" / "applications"
+        icons = Path.home() / ".local" / "share" / "icons" / "hicolor" / "256x256" / "apps"
+        apps.mkdir(parents=True, exist_ok=True)
+        icons.mkdir(parents=True, exist_ok=True)
+
+        icon_dest = icons / "stemchotic.png"
+        icon_src = _resource_path("stemchotic.png")
+        if icon_src and not icon_dest.exists():
+            shutil.copyfile(icon_src, icon_dest)
+
+        content = (
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=Stemchotic\n"
+            "Comment=Dead-simple stem separator\n"
+            f'Exec="{get_launcher_path()}"\n'
+            "Terminal=true\n"
+            "Icon=stemchotic\n"
+            "Categories=AudioVideo;Audio;\n"
+        )
+        desktop = apps / "stemchotic.desktop"
+        if not desktop.exists() or desktop.read_text() != content:
+            desktop.write_text(content)
+            log("Installed/updated stemchotic.desktop")
+    except Exception as e:
+        log(f"desktop install skipped: {e}")
 
 
 def get_app_dir() -> Path:
@@ -734,17 +895,12 @@ def clean_install():
 
 
 def main():
-    wezterm, lua = host_paths()
-    if should_relaunch_in_host(sys.argv, _has_terminal(), wezterm.exists()):
-        cmd = build_host_command(
-            str(wezterm), str(lua), str(get_launcher_dir()),
-            str(get_launcher_path()), sys.argv[1:],
-        )
-        os.execv(str(wezterm), cmd)  # replaces this process; does not return
+    maybe_relaunch_in_host()  # may re-exec into WezTerm and not return
 
     set_terminal_size(90, 40)
     init_logging()
     log(f"Launcher v{LAUNCHER_VERSION}")
+    ensure_linux_desktop()  # no-op off Linux
 
     if RELEASE_TAG:
         print(f"\nStemchotic Launcher v{LAUNCHER_VERSION} [DEV]")

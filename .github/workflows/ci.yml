@@ -94,7 +94,9 @@ jobs:
         run: |
           $CERTIFI_PATH = python -c "import certifi; print(certifi.where())"
           pyinstaller --onefile --name stemchotic-launcher --clean --noconfirm `
+            --icon packaging/windows/stemchotic.ico `
             --add-data "$CERTIFI_PATH;certifi" `
+            --add-data "packaging/macos/wezterm.lua;." `
             --hidden-import certifi `
             launcher.py
         shell: pwsh
@@ -105,6 +107,7 @@ jobs:
           CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())")
           pyinstaller --onefile --name stemchotic-launcher-linux --clean --noconfirm \
             --add-data "$CERTIFI_PATH:certifi" \
+            --add-data "packaging/linux/stemchotic.png:." \
             --hidden-import certifi \
             launcher.py
 
