@@ -40,6 +40,7 @@ for b in wezterm wezterm-gui wezterm-mux-server strip-ansi-escapes; do
 done
 cp "$ROOT/packaging/macos/wezterm.lua" "$APP/Contents/Resources/"
 cp "$ROOT/packaging/macos/WezTerm-LICENSE.txt" "$APP/Contents/Resources/"
+cp "$ROOT/packaging/macos/Stemchotic.icns" "$APP/Contents/Resources/"
 cp "$ROOT/packaging/macos/Info.plist" "$APP/Contents/"
 
 echo "==> Building dev app.zip (local source, runs offline) next to the .app"
