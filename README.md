@@ -31,10 +31,18 @@ Grab the build for your OS from
 - Windows: `stemchotic-launcher.exe`
 - Linux: `stemchotic-launcher-linux`
 
-On Windows and Linux, put the launcher in a folder you like and run it. On
-macOS, launch Stemchotic from Applications. Everything it installs goes into
-the standard per-user app directories for your OS (on macOS, `~/Library`), so
+On macOS, launch Stemchotic from Applications. On Windows and Linux, put the
+launcher in a folder you like and run it. Everything it installs goes into the
+standard per-user app directories for your OS (on macOS, `~/Library`), so
 nothing lands in system directories.
+
+**Windows:** the launcher is not yet code-signed, so the first run shows a
+"Windows protected your PC" SmartScreen prompt. Click **More info**, then
+**Run anyway**. On first run it downloads a small terminal (WezTerm) to give
+Stemchotic its own window; later launches open straight into it.
+
+**Linux:** after the first run (launch it from a terminal once), Stemchotic
+also appears in your application menu and opens in your default terminal.
 
 **First run:** the launcher checks for the latest release, downloads the app,
 then asks one consent question before installing Python and the audio
