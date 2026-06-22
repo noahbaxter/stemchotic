@@ -89,15 +89,18 @@ def show_stem_picker(state: dict) -> dict | None:
 
 
 def _build_pane(state: dict) -> TwoPane:
+    # Only the stable mutable refs are captured. Every volatile scalar
+    # (quality, one_pass, kit_source) is read from `state` live inside the
+    # per-frame closures, so a setting change shows immediately instead of
+    # waiting for the pane to be rebuilt.
     selected: set = state["selected"]
     models = state["models"]
-    one_pass = state.get("one_pass")
-    quality = state["quality"]
-    keep_all = state["keep_all"]
-    drum_stem = state["kit_source"] == "stem"
 
     # --- left pane: stems + Residual ---
     def left_rows():
+        quality = state["quality"]
+        one_pass = state.get("one_pass")
+        drum_stem = state["kit_source"] == "stem"
         rows = []
         for opt in STEM_OPTIONS:
             rows.append((_stem_render(opt, selected, models, quality, one_pass, drum_stem),
@@ -114,7 +117,7 @@ def _build_pane(state: dict) -> TwoPane:
                 return   # disabled: Everything already gives every stem
             state["residual"] = not state["residual"]
         elif isinstance(val, tuple) and val[0] == "stem":
-            if drum_stem:
+            if state["kit_source"] == "stem":
                 return   # instrument picks do not apply this run
             name = val[1]
             selected.discard(name) if name in selected else selected.add(name)
@@ -125,7 +128,7 @@ def _build_pane(state: dict) -> TwoPane:
         split = "Off" if state["kit_split"] == "off" else state["kit_split"]
         rows = [
             (_opt_render("Format", FORMATS, state["output_format"]), SET_FORMAT, True),
-            (_opt_render("Quality", ["Best", "Fast"], _QUALITY_LABEL[quality]), SET_QUALITY, True),
+            (_opt_render("Quality", ["Best", "Fast"], _QUALITY_LABEL[state["quality"]]), SET_QUALITY, True),
             (_opt_render("Scope", ["My picks", "Everything"], scope), SET_SCOPE, True),
         ]
         if "Drums" in selected:
@@ -150,8 +153,8 @@ def _build_pane(state: dict) -> TwoPane:
 
     def footer():
         # Recomputed each frame so the plan reflects live toggles.
-        plan = plan_text(list(selected), models, one_pass, quality, state["keep_all"],
-                         state["kit_split"], state["kit_source"],
+        plan = plan_text(list(selected), models, state.get("one_pass"), state["quality"],
+                         state["keep_all"], state["kit_split"], state["kit_source"],
                          state["residual"] and not state["keep_all"])
         keys = (f"  {Colors.PRIMARY}Tab{Colors.MUTED} panes  "
                 f"{Colors.PRIMARY}Space{Colors.MUTED} pick/change  "
