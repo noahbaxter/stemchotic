@@ -151,12 +151,13 @@ def _load_catalog():
 
 
 def _models_for(rows, cstem, engine, current):
-    """Right-pane entries for a target. Curated picks (current selection, the
-    category default, any custom model producing this stem) pinned first, then
-    the catalogue ranked by this stem's SDR. Each entry:
+    """Right-pane entries for a target. Pinned first by ROLE (the category
+    default, then any custom model producing this stem), then the catalogue
+    ranked by this stem's SDR. The current pick is NOT pinned, so changing it
+    only moves the selection marker and never reshuffles the list. Each entry:
     {fn, sdr, tier, note, current, pinned}."""
     pinned_fns = []
-    for fn in [current, ENGINE_MODEL.get(engine), *(_CUSTOM_STEMS.keys())]:
+    for fn in [ENGINE_MODEL.get(engine), *(_CUSTOM_STEMS.keys())]:
         if not fn or fn in pinned_fns:
             continue
         if fn in _CUSTOM_STEMS and cstem not in _CUSTOM_STEMS[fn]:
@@ -225,7 +226,14 @@ def _collapsed(rows, cstem, engine, current):
             continue
         seen.add(fam)
         champs.append(e)
-    return pinned + champs
+    out = pinned + champs
+    # Always keep the current pick visible, even if it's not a default/champion,
+    # so you can see what you selected. Appended (stable) rather than pinned.
+    if current and current not in {e["fn"] for e in out}:
+        cur_entry = next((e for e in rest if e["fn"] == current), None)
+        if cur_entry:
+            out.append(cur_entry)
+    return out
 
 
 # --- rendering ---
@@ -282,6 +290,10 @@ def show_model_overlay(selected: list, state: dict) -> None:
     view = {"all": False}                # collapsed by default; toggled by the rows below
     SHOW_ALL = ("show_all",)
     SHOW_FEWER = ("show_fewer",)
+    RESET_ALL = ("reset_all",)
+    # Always present (even with nothing to reset) so it never appears/disappears.
+    reset_row = (lambda f, c: f"{Colors.MUTED}↺ Reset all model picks to defaults{Colors.RESET}",
+                 RESET_ALL, True)
 
     def left_rows():
         return [(lambda focus, cursor, name=t[0]: _left_row(name, cursor, focus), t, True)
@@ -295,19 +307,22 @@ def show_model_overlay(selected: list, state: dict) -> None:
         _, cstem, engine = target
         if cstem == "_kit":             # not a catalogue stem: list DrumSep models directly
             cur = models.get("kit", KIT_LAYOUTS["5"]["model"])
-            return [_entry_row(e, "kit") for e in _kit_entries(cur)]
-        cur = category_model(engine, state.get("quality", DEFAULT_QUALITY), models)
-        full = _models_for(rows, cstem, engine, cur)
-        n = len(full)
-        if query:
-            # Searching always hits the full catalogue; the widget filters it. No toggle.
-            return [_entry_row(e, engine) for e in full]
-        if view["all"]:
-            toggle = (lambda f, c: f"{Colors.MUTED}Show top picks only{Colors.RESET}", SHOW_FEWER, True)
-            return [toggle] + [_entry_row(e, engine) for e in full]
-        entries = _collapsed(rows, cstem, engine, cur)
-        toggle = (lambda f, c: f"{Colors.MUTED}Show all {n} models{Colors.RESET}", SHOW_ALL, True)
-        return [_entry_row(e, engine) for e in entries] + [toggle]
+            result = [_entry_row(e, "kit") for e in _kit_entries(cur)]
+        else:
+            cur = category_model(engine, state.get("quality", DEFAULT_QUALITY), models)
+            full = _models_for(rows, cstem, engine, cur)
+            n = len(full)
+            if query:
+                # Searching always hits the full catalogue; the widget filters it. No toggle.
+                result = [_entry_row(e, engine) for e in full]
+            elif view["all"]:
+                toggle = (lambda f, c: f"{Colors.MUTED}Show top picks only{Colors.RESET}", SHOW_FEWER, True)
+                result = [toggle] + [_entry_row(e, engine) for e in full]
+            else:
+                entries = _collapsed(rows, cstem, engine, cur)
+                toggle = (lambda f, c: f"{Colors.MUTED}Show all {n} models{Colors.RESET}", SHOW_ALL, True)
+                result = [_entry_row(e, engine) for e in entries] + [toggle]
+        return result + [reset_row]
 
     def on_right_enter(val):
         if val == SHOW_ALL:
@@ -315,6 +330,10 @@ def show_model_overlay(selected: list, state: dict) -> None:
             return
         if val == SHOW_FEWER:
             view["all"] = False
+            return
+        if val == RESET_ALL:
+            models.clear()              # drop every override -> back to built-in defaults
+            state["one_pass"] = None
             return
         eng, fn = val["_engine"], val["fn"]
         default = KIT_LAYOUTS["5"]["model"] if eng == "kit" else ENGINE_MODEL.get(eng)
