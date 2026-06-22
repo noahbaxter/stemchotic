@@ -118,8 +118,18 @@ def confirm_downloads(missing: list[tuple[str, int | None]], assume_yes: bool = 
         print(f"  This run needs to download: {lines}")
         print("  Re-run with --yes to allow model downloads in non-interactive mode.")
         return False
-    try:
-        ans = input(f"  This run downloads: {lines}. Continue? [Y/n] ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        return False
-    return ans in ("", "y", "yes")
+    from chotic_ui import getch
+    print(f"  This run downloads: {lines}. Continue? [Y/n] ", end="", flush=True)
+    while True:
+        try:
+            ch = getch()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return False
+        if ch in ("\r", "\n", "y", "Y"):   # Enter defaults to yes
+            print("y")
+            return True
+        if ch in ("n", "N", "\x1b", "\x03"):
+            print("n")
+            return False
+        # ignore any other key and keep waiting
