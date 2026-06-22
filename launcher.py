@@ -277,16 +277,7 @@ def _prompt_directory_action() -> str:
     print("  [D] Delete the old data (fresh download)")
     print("  [I] Ignore (leave old data, download fresh here)")
 
-    while True:
-        try:
-            choice = input("\nChoice [M/D/I]: ").strip().upper()
-        except (EOFError, KeyboardInterrupt):
-            print("\nCancelled.")
-            sys.exit(1)
-
-        if choice in ("M", "D", "I"):
-            return choice
-        print("Please enter M, D, or I.")
+    return choice_key("\nChoice [M/D/I]: ", "mdi").upper()
 
 
 def _do_delete(old_root: Path):
@@ -338,16 +329,7 @@ def _prompt_fallback() -> str:
     print("  [D] Delete the old data instead")
     print("  [I] Ignore and download fresh")
 
-    while True:
-        try:
-            choice = input("\nChoice [D/I]: ").strip().upper()
-        except (EOFError, KeyboardInterrupt):
-            print("\nCancelled.")
-            sys.exit(1)
-
-        if choice in ("D", "I"):
-            return choice
-        print("Please enter D or I.")
+    return choice_key("\nChoice [D/I]: ", "di").upper()
 
 
 def handle_directory_change():
@@ -635,11 +617,7 @@ def hardware_choice() -> str:
         print("\n  No NVIDIA GPU detected.")
         print("  [A] I have an AMD or Intel GPU (use DirectML acceleration)")
         print("  [C] CPU only (safe default)")
-        try:
-            ans = input("  Choice [A/C]: ").strip().upper()
-        except (EOFError, KeyboardInterrupt):
-            ans = "C"
-        choice = "dml" if ans == "A" else "cpu"
+        choice = "dml" if choice_key("  Choice [A/C]: ", "ac", default="c") == "a" else "cpu"
     else:
         choice = "cpu"
     state["hardware"] = choice
@@ -703,8 +681,7 @@ def ensure_env(hardware: str | None = None):
         print("  This downloads roughly 2.5GB and uses about 5GB of disk.")
         print("  (Separation models download later, per use, with their own prompt.)")
         if _has_terminal():
-            ans = input("  Continue? [Y/n] ").strip().lower()
-            if ans not in ("", "y", "yes"):
+            if choice_key("  Continue? [Y/n] ", "yn", default="y") != "y":
                 error_exit("Setup declined. Nothing was installed.")
     else:
         print("  Updating dependencies...")
@@ -773,6 +750,45 @@ def wait_for_keypress():
             termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
 
+def read_one_key() -> str:
+    """Read a single keypress without Enter. Returns the char lowercased
+    ('\\r'/'\\n' for Enter, '\\x1b' for Esc)."""
+    if sys.platform == "win32":
+        import msvcrt
+        ch = msvcrt.getch()
+        if ch in (b"\x00", b"\xe0"):   # arrow/function-key prefix: consume and ignore
+            msvcrt.getch()
+            return ""
+        return ch.decode("utf-8", "ignore").lower()
+    import termios
+    import tty
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    return ch.lower()
+
+
+def choice_key(prompt: str, valid: str, default: str = "") -> str:
+    """Single-keypress menu: echoes and returns one of `valid` (lowercased), no
+    Enter needed. Enter returns `default` when set; Esc/Ctrl-C cancels."""
+    print(prompt, end="", flush=True)
+    while True:
+        ch = read_one_key()
+        if ch in ("\r", "\n") and default:
+            print(default)
+            return default
+        if ch in ("\x1b", "\x03"):
+            print("\nCancelled.")
+            sys.exit(1)
+        if ch in valid:
+            print(ch)
+            return ch
+
+
 def error_exit(message: str) -> NoReturn:
     """Print error message and exit."""
     log(f"ERROR: {message}")
@@ -809,8 +825,7 @@ def clean_install():
             shutil.rmtree(p)
     models = root / "models"
     if models.exists() and _has_terminal():
-        ans = input("  Also delete downloaded models (the big files)? [y/N] ").strip().lower()
-        if ans in ("y", "yes"):
+        if choice_key("  Also delete downloaded models (the big files)? [y/N] ", "yn", default="n") == "y":
             shutil.rmtree(models)
 
 
