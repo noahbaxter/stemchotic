@@ -137,9 +137,47 @@ def get_app_dir() -> Path:
     return get_root_dir() / subdir
 
 
+_APP_DIRNAME = "Stemchotic"
+
+
+def cache_dir() -> Path:
+    """OS cache location for regenerable heavy data (python, env, app, models)."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+        return base / _APP_DIRNAME / "Cache"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Caches" / _APP_DIRNAME
+    base = Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache"))
+    return base / "stemchotic"
+
+
+def data_dir() -> Path:
+    """OS location for small precious state (hardware choice, prefs)."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+        return base / _APP_DIRNAME / "Data"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / _APP_DIRNAME
+    base = Path(os.environ.get("XDG_DATA_HOME") or (Path.home() / ".local" / "share"))
+    return base / "stemchotic"
+
+
+def log_dir() -> Path:
+    """OS location for logs."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+        return base / _APP_DIRNAME / "Logs"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Logs" / _APP_DIRNAME
+    base = Path(os.environ.get("XDG_STATE_HOME") or (Path.home() / ".local" / "state"))
+    return base / "stemchotic"
+
+
 def get_root_dir() -> Path:
-    """Get the .stemchotic directory."""
-    return get_launcher_dir() / ".stemchotic"
+    """Regenerable heavy data (Python runtime, env, app source, tools, models)
+    in the OS cache dir, so it lives in a stable place regardless of where the
+    app bundle sits or runs from (including a read-only DMG)."""
+    return cache_dir()
 
 
 def get_asset_name() -> str:
@@ -168,12 +206,8 @@ def get_installed_version() -> str:
 # --- State file management ---
 
 def get_state_dir() -> Path:
-    """Get the directory for launcher state file."""
-    if sys.platform == "win32":
-        appdata = os.environ.get("APPDATA", "")
-        if appdata:
-            return Path(appdata) / "stemchotic"
-    return Path.home() / ".stemchotic"
+    """Directory for the launcher state file (small precious prefs)."""
+    return data_dir()
 
 
 def get_state_file() -> Path:
@@ -204,10 +238,10 @@ def write_state(state: dict):
 def init_logging():
     """Initialize daily log file."""
     global _log_file
-    log_dir = get_root_dir()
-    log_dir.mkdir(parents=True, exist_ok=True)
+    d = log_dir()
+    d.mkdir(parents=True, exist_ok=True)
     date_str = time.strftime("%Y-%m-%d")
-    log_path = log_dir / f"launcher-{date_str}.log"
+    log_path = d / f"launcher-{date_str}.log"
     try:
         _log_file = open(log_path, "a", encoding="utf-8")
         log(f"=== Launcher started at {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
@@ -238,141 +272,12 @@ def close_logging():
         _log_file = None
 
 
-# --- Directory change handling ---
-
-def _state_key() -> str:
-    """State key prefix so dev and prod launchers don't share state."""
-    return "dev" if RELEASE_TAG else "prod"
-
-
-def _save_launcher_state(current_path: str):
-    """Save current launcher path to state file."""
-    key = _state_key()
-    state = read_state()
-    state[f"launcher_path_{key}"] = current_path
-    state[f"last_run_{key}"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    # Migrate: remove old shared keys so they don't cause false triggers
-    state.pop("launcher_path", None)
-    state.pop("last_run", None)
-    write_state(state)
-
-
 def _has_terminal() -> bool:
     """Check if we have an interactive terminal for prompts."""
     try:
         return sys.stdin is not None and sys.stdin.isatty()
     except Exception:
         return False
-
-
-def _prompt_directory_action() -> str:
-    """Prompt user for directory change action. Returns 'M', 'D', or 'I'."""
-    # No terminal - auto-ignore to avoid blocking
-    if not _has_terminal():
-        log("No terminal available, auto-ignoring old data")
-        return "I"
-
-    print("\nWhat would you like to do?")
-    print("  [M] Move the data to the new location (faster startup)")
-    print("  [D] Delete the old data (fresh download)")
-    print("  [I] Ignore (leave old data, download fresh here)")
-
-    return choice_key("\nChoice [M/D/I]: ", "mdi").upper()
-
-
-def _do_delete(old_root: Path):
-    """Delete old .stemchotic folder."""
-    log(f"Deleting old data: {old_root}")
-    print(f"\nDeleting old data at {old_root}...")
-    try:
-        shutil.rmtree(old_root)
-        print("Done!")
-    except Exception as e:
-        log(f"Delete failed: {e}")
-        print(f"Warning: Failed to delete: {e}")
-        print("Continuing anyway...")
-
-
-def _do_move(old_root: Path) -> bool:
-    """Move old .stemchotic to new location. Returns True on success."""
-    new_root = get_root_dir()
-    log(f"Moving data: {old_root} -> {new_root}")
-
-    if new_root.exists():
-        print(f"\nNote: {new_root} already exists, removing it first...")
-        try:
-            shutil.rmtree(new_root)
-        except Exception as e:
-            log(f"Failed to remove existing folder: {e}")
-            print(f"Failed to remove existing folder: {e}")
-            return False
-
-    print("\nMoving data to new location...")
-    try:
-        shutil.move(str(old_root), str(new_root))
-        print("Done!")
-        return True
-    except Exception as e:
-        log(f"Move failed: {e}")
-        print(f"Failed to move: {e}")
-        return False
-
-
-def _prompt_fallback() -> str:
-    """Prompt for fallback action after move fails. Returns 'D' or 'I'."""
-    # No terminal - auto-ignore
-    if not _has_terminal():
-        log("No terminal available, auto-ignoring after move failure")
-        return "I"
-
-    print("\nWould you like to:")
-    print("  [D] Delete the old data instead")
-    print("  [I] Ignore and download fresh")
-
-    return choice_key("\nChoice [D/I]: ", "di").upper()
-
-
-def handle_directory_change():
-    """Check if launcher moved and handle old .stemchotic folder."""
-    current_path = str(get_launcher_path())
-    key = _state_key()
-    state = read_state()
-    old_path = state.get(f"launcher_path_{key}") or state.get("launcher_path")
-
-    # First run or same location
-    if not old_path or old_path == current_path:
-        _save_launcher_state(current_path)
-        return
-
-    old_root = Path(old_path).parent / ".stemchotic"
-
-    # Old location has no data
-    if not old_root.exists():
-        _save_launcher_state(current_path)
-        return
-
-    log(f"Launcher moved: {old_path} -> {current_path}")
-
-    # Prompt user
-    print(f"\nIt looks like you moved the launcher from:")
-    print(f"  {Path(old_path).parent}")
-    print(f"\nFound cached app data at old location.")
-
-    choice = _prompt_directory_action()
-    log(f"User chose: {choice}")
-
-    if choice == "M":
-        if not _do_move(old_root):
-            choice = _prompt_fallback()
-
-    if choice == "D":
-        _do_delete(old_root)
-    elif choice == "I":
-        log("Ignoring old data")
-        print("\nIgnoring old data, will download fresh.")
-
-    _save_launcher_state(current_path)
-    print()
 
 
 # --- GitHub API ---
@@ -689,7 +594,7 @@ def ensure_env(hardware: str | None = None):
     uv = ensure_uv()
     env = os.environ.copy()
     env["UV_PYTHON_INSTALL_DIR"] = str(get_root_dir() / "python")
-    env["STEMCHOTIC_ROOT"] = str(get_launcher_dir())   # so prep steps write to the side-folder
+    env["STEMCHOTIC_ROOT"] = str(get_root_dir())   # so prep steps write to the cache dir
 
     def uv_run(*args):
         r = subprocess.run([str(uv), *args], cwd=get_app_dir(), env=env)
@@ -888,8 +793,6 @@ def main():
         if not (get_app_dir() / "stemchotic.py").exists():
             error_exit("No cached app found. Run without --offline to download.")
     else:
-        handle_directory_change()
-
         print("Checking for updates...")
         release = fetch_latest_release()
         download_url, remote_version = get_download_url(release)
@@ -940,7 +843,7 @@ def main():
             filtered_args.append(arg)
     args = [str(env_python()), str(app_entry)] + filtered_args
     env = os.environ.copy()
-    env["STEMCHOTIC_ROOT"] = str(get_launcher_dir())
+    env["STEMCHOTIC_ROOT"] = str(get_root_dir())
     close_logging()
     sys.stdout.flush()  # execve discards unflushed buffers (piped stdout)
     if sys.platform == "win32":

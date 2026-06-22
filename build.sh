@@ -11,7 +11,11 @@ PY="$ROOT/.venv/bin/python"
 
 if [ "${1:-}" = "clean" ]; then
     echo "Removing build output and anything the app installed locally..."
-    rm -rf "$ROOT/build" "$ROOT/dist" "$HOME/.stemchotic" /tmp/audio-separator-models
+    rm -rf "$ROOT/build" "$ROOT/dist" /tmp/audio-separator-models \
+        "$HOME/Library/Caches/Stemchotic" \
+        "$HOME/Library/Application Support/Stemchotic" \
+        "$HOME/Library/Logs/Stemchotic" \
+        "$HOME/.stemchotic"   # legacy side-folder from before the OS-dirs move
     shift
 fi
 

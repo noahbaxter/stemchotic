@@ -72,7 +72,7 @@ def model_dir() -> str | None:
     """Pinned model cache when launched via the launcher (STEMCHOTIC_ROOT set),
     else None -> audio-separator's default cache (dev runs)."""
     root = os.environ.get("STEMCHOTIC_ROOT")
-    return os.path.join(root, ".stemchotic", "models") if root else None
+    return os.path.join(root, "models") if root else None
 
 
 def models_dir() -> str:
