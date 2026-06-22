@@ -712,6 +712,7 @@ def ensure_env(hardware: str | None = None):
     uv = ensure_uv()
     env = os.environ.copy()
     env["UV_PYTHON_INSTALL_DIR"] = str(get_root_dir() / "python")
+    env["STEMCHOTIC_ROOT"] = str(get_launcher_dir())   # so prep steps write to the side-folder
 
     def uv_run(*args):
         r = subprocess.run([str(uv), *args], cwd=get_app_dir(), env=env)
@@ -736,6 +737,19 @@ def ensure_env(hardware: str | None = None):
             ensure_env(hardware="cpu")
             return
         error_exit("Dependency install failed. See uv output above.")
+    # Pre-fetch deps that download binaries on first use, so the first run needs
+    # no extra download. static-ffmpeg pulls ffmpeg/ffprobe here. Best-effort:
+    # if it fails (e.g. offline), the app fetches them lazily on first use.
+    print("  Fetching ffmpeg...")
+    subprocess.run([str(env_python()), "-c",
+                    "import static_ffmpeg; static_ffmpeg.add_paths()"],
+                   cwd=get_app_dir(), env=env)
+    # Build the model-list cache now (pays the one-time torch import here, during
+    # install) so the Models screen opens instantly from the very first launch.
+    print("  Preparing model list...")
+    subprocess.run([str(env_python()), "-c",
+                    "from src.screens.model_picker import _load_catalog; _load_catalog()"],
+                   cwd=get_app_dir(), env=env)
     fp_file.parent.mkdir(parents=True, exist_ok=True)
     fp_file.write_text(fp)
 
