@@ -35,7 +35,7 @@ jobs:
         include:
           - os: macos-latest
             name: macos
-            artifact: stemchotic-launcher-macos
+            artifact: Stemchotic.dmg
           - os: windows-latest
             name: windows
             artifact: stemchotic-launcher.exe
@@ -48,6 +48,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Check for Apple signing secrets
         if: matrix.name == 'macos'
@@ -105,35 +107,15 @@ jobs:
       - name: Install dependencies
         run: pip install pyinstaller certifi
 
-      - name: Build launcher (macOS, signed)
+      - name: Build, sign and notarize the macOS app (DMG)
         if: matrix.name == 'macos' && steps.signing.outputs.available == 'true'
+        env:
+          PYTHON: python
+          MACOS_SIGN_IDENTITY: ${{ env.APP_IDENTITY }}
+          NOTARY_PROFILE: notarytool-profile
         run: |
-          CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())")
-          pyinstaller --onefile --name stemchotic-launcher-macos --clean --noconfirm \
-            --add-data "$CERTIFI_PATH:certifi" \
-            --hidden-import certifi \
-            --codesign-identity "$APP_IDENTITY" \
-            launcher.py
-          codesign --verify --strict dist/stemchotic-launcher-macos
-
-      - name: Build launcher (macOS, unsigned fallback)
-        if: matrix.name == 'macos' && steps.signing.outputs.available != 'true'
-        run: |
-          CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())")
-          pyinstaller --onefile --name stemchotic-launcher-macos --clean --noconfirm \
-            --add-data "$CERTIFI_PATH:certifi" \
-            --hidden-import certifi \
-            launcher.py
-
-      - name: Notarize launcher (macOS)
-        if: matrix.name == 'macos' && steps.signing.outputs.available == 'true'
-        run: |
-          cd dist
-          zip -q stemchotic-launcher-macos.zip stemchotic-launcher-macos
-          xcrun notarytool submit stemchotic-launcher-macos.zip \
-            --keychain-profile "notarytool-profile" \
-            --wait
-          rm stemchotic-launcher-macos.zip
+          bash packaging/macos/build_app.sh      # assemble Stemchotic.app (launcher + WezTerm)
+          bash packaging/macos/sign_and_dmg.sh   # Developer ID sign + notarize + DMG
 
       - name: Build launcher (Windows)
         if: matrix.name == 'windows'
@@ -186,7 +168,7 @@ jobs:
 
           ASSETS=(
             artifacts/app/app.zip
-            artifacts/stemchotic-launcher-macos/stemchotic-launcher-macos
+            artifacts/Stemchotic.dmg/Stemchotic.dmg
             artifacts/stemchotic-launcher.exe/stemchotic-launcher.exe
             artifacts/stemchotic-launcher-linux/stemchotic-launcher-linux
           )
