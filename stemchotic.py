@@ -99,6 +99,20 @@ def run_tui():
 
     set_theme("kanagawa")
     configure_header(BANNER, __version__)
+
+    # Warm the model catalogue in the background so the M (models) screen opens
+    # instantly instead of paying the first audio-separator/torch import then.
+    import threading
+    from src.screens.model_picker import _load_catalog
+
+    def _preload_catalog():
+        try:
+            _load_catalog()
+        except Exception:
+            pass   # the M screen will surface any real error when opened
+
+    threading.Thread(target=_preload_catalog, daemon=True).start()
+
     state = new_state()  # persists for the whole session
     while True:
         choice = show_stem_picker(state)

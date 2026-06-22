@@ -10,7 +10,11 @@ Enter sets the focused model for that target. Picks write into the picker state
 (per category, session).
 """
 
+import hashlib
+import json
+import os
 import re
+import threading
 
 from chotic_ui import Colors, TwoPane
 from ..core.engines import (CONFIG, DRUMSEP_SDR, ENGINE_MODEL, KIT_LAYOUTS, MODEL_SHORT,
@@ -34,6 +38,56 @@ TARGETS = [
 ]
 
 _CATALOG = None
+_CATALOG_LOCK = threading.Lock()
+_CATALOG_SCHEMA = 1   # bump when the row shape or custom-model handling changes
+
+
+def _catalog_cache_file() -> str:
+    from ..core.separator import models_dir
+    return os.path.join(models_dir(), ".catalog.json")
+
+
+def _audio_separator_version() -> str:
+    try:
+        from importlib.metadata import version
+        return version("audio-separator")
+    except Exception:
+        return "?"
+
+
+def _catalog_fingerprint() -> dict:
+    """What the cached catalogue depends on. The model list changes only when
+    audio-separator upgrades (its bundled jsons) or when we add/change custom
+    models, so the cache is reused for everything else and rebuilt when either
+    of these moves."""
+    custom = hashlib.sha256(json.dumps(_CUSTOM_STEMS, sort_keys=True).encode()).hexdigest()[:12]
+    return {"schema": _CATALOG_SCHEMA, "as": _audio_separator_version(), "custom": custom}
+
+
+def _read_catalog_cache():
+    """Cached rows if the cache still matches the fingerprint, else None. Rows
+    come back as lists (JSON), which unpack like the tuples."""
+    try:
+        with open(_catalog_cache_file(), encoding="utf-8") as f:
+            blob = json.load(f)
+        fp = _catalog_fingerprint()
+        if all(blob.get(k) == v for k, v in fp.items()):
+            return blob["rows"]
+    except Exception:
+        pass
+    return None
+
+
+def _write_catalog_cache(rows) -> None:
+    try:
+        path = _catalog_cache_file()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({**_catalog_fingerprint(), "rows": rows}, f)
+        os.replace(tmp, path)
+    except Exception:
+        pass   # caching is best-effort; a write failure just means a slow next load
 
 
 def _kit_entries(current):
@@ -76,13 +130,23 @@ def _load_catalog():
     global _CATALOG
     if _CATALOG is not None:
         return _CATALOG
-    from ..core.separator import _make_separator
-    data = _make_separator().get_simplified_model_list()
-    rows = []
-    for fn, info in data.items():
-        sdrs = {s: None for s in _CUSTOM_STEMS[fn]} if fn in _CUSTOM_STEMS else _parse(info)
-        rows.append((fn, info.get("Type", "?"), sdrs))
-    _CATALOG = rows
+    # Lock so the background startup preload and an M-press can't both build the
+    # catalogue (each constructs a heavy Separator) at once.
+    with _CATALOG_LOCK:
+        if _CATALOG is not None:
+            return _CATALOG
+        cached = _read_catalog_cache()
+        if cached is not None:
+            _CATALOG = cached            # instant: no Separator/torch on repeat launches
+            return _CATALOG
+        from ..core.separator import _make_separator
+        data = _make_separator().get_simplified_model_list()
+        rows = []
+        for fn, info in data.items():
+            sdrs = {s: None for s in _CUSTOM_STEMS[fn]} if fn in _CUSTOM_STEMS else _parse(info)
+            rows.append((fn, info.get("Type", "?"), sdrs))
+        _CATALOG = rows
+        _write_catalog_cache(rows)
     return _CATALOG
 
 
