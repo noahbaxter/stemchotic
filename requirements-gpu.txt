@@ -8,4 +8,5 @@
 # already bundles CUDA, so the extra index is redundant but harmless there.
 --extra-index-url https://download.pytorch.org/whl/cu124
 audio-separator[gpu]==0.44.2
+static-ffmpeg==3.0  # bundled ffmpeg/ffprobe on PATH (see requirements.txt)
 -e ./libs/chotic-ui

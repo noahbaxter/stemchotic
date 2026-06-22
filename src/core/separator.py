@@ -10,6 +10,8 @@ our own step messages through the `progress` callback instead.
 import logging
 import os
 import re
+import shutil
+import threading
 from pathlib import Path
 
 from .engines import Pass, resolve, short_name, category_model, DEFAULT_QUALITY
@@ -79,6 +81,33 @@ def models_dir() -> str:
     return model_dir() or DEFAULT_CACHE
 
 
+_FFMPEG_LOCK = threading.Lock()
+_ffmpeg_ready = False
+
+
+def ensure_ffmpeg() -> None:
+    """Put ffmpeg + ffprobe on PATH for audio-separator and pydub.
+
+    A packaged app's PATH does not include the user's ffmpeg, and a fresh
+    machine may have none, so we ship our own via the static-ffmpeg package and
+    prepend it here. A real system ffmpeg already on PATH (dev machines, CLI
+    users) is used as-is; we only fall back to the bundled binaries otherwise.
+    Idempotent and thread-safe (the TUI warms this from a background thread)."""
+    global _ffmpeg_ready
+    if _ffmpeg_ready:
+        return
+    with _FFMPEG_LOCK:
+        if _ffmpeg_ready:
+            return
+        if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
+            try:
+                import static_ffmpeg
+                static_ffmpeg.add_paths()   # prepend cached ffmpeg/ffprobe to PATH
+            except Exception:
+                pass   # leave PATH as-is; Separator reports if ffmpeg is truly missing
+        _ffmpeg_ready = True
+
+
 def _make_separator(output_dir=None, single_stem=None, output_format="WAV"):
     """Construct a Separator with logging silenced and the model cache pinned
     under STEMCHOTIC_ROOT when launched via the launcher. Raises a friendly
@@ -89,6 +118,7 @@ def _make_separator(output_dir=None, single_stem=None, output_format="WAV"):
         raise RuntimeError(
             "audio-separator is not installed. Run: pip install -r requirements.txt"
         ) from e
+    ensure_ffmpeg()
     kwargs = {}
     md = model_dir()
     if md:

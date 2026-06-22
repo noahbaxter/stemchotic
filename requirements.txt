@@ -3,5 +3,10 @@
 # audio-separator[gpu].
 audio-separator[cpu]==0.44.2
 
+# Bundled ffmpeg/ffprobe. audio-separator (and pydub) shell out to bare `ffmpeg`
+# on PATH; a packaged app's PATH does not include the user's ffmpeg, and end
+# users may not have one. static-ffmpeg ships both binaries cross-platform.
+static-ffmpeg==3.0
+
 # Shared TUI toolkit (git submodule under libs/), installed editable.
 -e ./libs/chotic-ui
