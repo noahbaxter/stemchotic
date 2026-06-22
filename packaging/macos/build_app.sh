@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-PY="$ROOT/.venv/bin/python"
+PY="${PYTHON:-$ROOT/.venv/bin/python}"   # CI sets PYTHON=python; local uses the venv
 BUILD="$ROOT/build/macos"
 DIST="$ROOT/dist"
 WEZ_VER="20240203-110809-5046fc22"
