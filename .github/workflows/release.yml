@@ -31,6 +31,7 @@ jobs:
 
   launcher:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
@@ -85,7 +86,9 @@ jobs:
             -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
 
           curl -sO https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
-          security import DeveloperIDG2CA.cer -k "$KEYCHAIN_PATH"
+          # The .p12 already bundles the Developer ID G2 intermediate, so this is
+          # best-effort: tolerate "already exists" instead of failing the build.
+          security import DeveloperIDG2CA.cer -k "$KEYCHAIN_PATH" || true
 
           security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
