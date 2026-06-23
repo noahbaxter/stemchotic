@@ -157,6 +157,10 @@ jobs:
 
   release:
     needs: [app, launcher]
+    # Publish whatever built, even if one platform failed (e.g. macOS notarization
+    # blocked by an Apple agreement). app.zip is required; the rest are added if
+    # present, and a re-run later fills in any missing platform asset.
+    if: ${{ always() && needs.app.result == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -172,12 +176,14 @@ jobs:
         run: |
           TAG="$GITHUB_REF_NAME"
 
-          ASSETS=(
-            artifacts/app/app.zip
-            artifacts/Stemchotic.dmg/Stemchotic.dmg
-            artifacts/stemchotic-launcher.exe/stemchotic-launcher.exe
-            artifacts/stemchotic-launcher-linux/stemchotic-launcher-linux
-          )
+          ASSETS=()
+          for f in \
+            artifacts/app/app.zip \
+            artifacts/Stemchotic.dmg/Stemchotic.dmg \
+            artifacts/stemchotic-launcher.exe/stemchotic-launcher.exe \
+            artifacts/stemchotic-launcher-linux/stemchotic-launcher-linux; do
+            [ -f "$f" ] && ASSETS+=("$f") || echo "::warning::missing asset $f (skipped)"
+          done
 
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "Updating existing release $TAG..."
