@@ -23,7 +23,7 @@ from typing import NoReturn
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-LAUNCHER_VERSION = "0.9.0"
+LAUNCHER_VERSION = "0.9.1"
 RELEASE_TAG = ""  # Injected to "dev-latest" for dev launcher builds
 PYTHON_VERSION = "3.12"
 UV_VERSION = "0.7.13"
