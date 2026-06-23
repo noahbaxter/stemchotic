@@ -23,7 +23,10 @@ from typing import NoReturn
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-LAUNCHER_VERSION = "0.9.1"
+# The launcher's own version, independent of the app (app.zip) version. The
+# launcher is a frozen bootstrapper users download once; only bump this when
+# launcher.py itself changes, not on every app release.
+LAUNCHER_VERSION = "1.0"
 RELEASE_TAG = ""  # Injected to "dev-latest" for dev launcher builds
 PYTHON_VERSION = "3.12"
 UV_VERSION = "0.7.13"
