@@ -318,6 +318,25 @@ def uninstall():
     print("\nUninstalled. Delete the launcher executable to finish.")
 
 
+def _child_env() -> dict:
+    """Environment for spawned subprocesses (venv python, uv, ffmpeg).
+
+    PyInstaller's onefile build points LD_LIBRARY_PATH at its extracted _MEIPASS
+    temp dir, which shadows system libraries for any child process: ffmpeg picks
+    up our old bundled libssl instead of the system one and dies when a system
+    lib (libcurl) needs a newer OpenSSL. PyInstaller stashes the pre-launch value
+    in LD_LIBRARY_PATH_ORIG; restore it so children use the system libs. Only
+    touches LD_LIBRARY_PATH (Linux); a no-op on macOS/Windows."""
+    env = os.environ.copy()
+    if getattr(sys, "frozen", False):
+        orig = env.get("LD_LIBRARY_PATH_ORIG")
+        if orig is not None:
+            env["LD_LIBRARY_PATH"] = orig
+        else:
+            env.pop("LD_LIBRARY_PATH", None)
+    return env
+
+
 def get_app_dir() -> Path:
     """Get the extracted app directory. Dev channel uses separate dir to coexist with production."""
     subdir = "_app_dev" if RELEASE_TAG else "_app"
@@ -779,7 +798,7 @@ def ensure_env(hardware: str | None = None):
         print("  Updating dependencies...")
 
     uv = ensure_uv()
-    env = os.environ.copy()
+    env = _child_env()
     env["UV_PYTHON_INSTALL_DIR"] = str(get_root_dir() / "python")
     env["STEMCHOTIC_ROOT"] = str(get_root_dir())   # so prep steps write to the cache dir
 
@@ -1042,7 +1061,7 @@ def main():
         elif arg not in launcher_flags:
             filtered_args.append(arg)
     args = [str(env_python()), str(app_entry)] + filtered_args
-    env = os.environ.copy()
+    env = _child_env()
     env["STEMCHOTIC_ROOT"] = str(get_root_dir())
     close_logging()
     sys.stdout.flush()  # execve discards unflushed buffers (piped stdout)
