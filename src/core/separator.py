@@ -21,6 +21,10 @@ from .registry import CUSTOM_MODELS, download_custom, ensure_registry
 # audio-separator 0.44.2's built-in default model_file_dir (dev runs).
 DEFAULT_CACHE = "/tmp/audio-separator-models"
 
+# Kit-split outputs are named 'Drums-Kick', 'Drums-Snare', ... so it's clear
+# they're drum components, not standalone stems.
+DRUM_PREFIX = "Drums-"
+
 
 def _pretty(stem: str) -> str:
     """Display form of a stem name: 'kick' -> 'Kick', 'hh' -> 'HH'."""
@@ -171,6 +175,21 @@ def _rename_all(paths: list[str], base: str, model: str, tag_model: bool) -> lis
     return kept
 
 
+def _prefix_kit(paths: list[str]) -> list[str]:
+    """Tag finished kit outputs as drum parts: rename '<base> [Piece]' to
+    '<base> [Drums-Piece]'. Only the trailing '[...]' before the extension is
+    touched, so a base name with its own brackets is left alone."""
+    out = []
+    for path in paths:
+        d, name = os.path.split(path)
+        new = re.sub(r"\[([^\[\]]+)\](\.[^.]+)$", rf"[{DRUM_PREFIX}\1]\2", name)
+        dest = os.path.join(d, new)
+        if dest != path:
+            os.replace(path, dest)
+        out.append(dest)
+    return out
+
+
 def _filter_to(paths: list[str], keep: list[str]) -> list[str]:
     """Keep only output files matching the wanted stem names; delete the rest."""
     keep_l = [k.lower() for k in keep]
@@ -318,7 +337,8 @@ def run(
                     os.remove(drums_path)  # drop the intermediate drums stem
                 except OSError:
                     pass
-            results += _merge_pieces(outs, p.merge, base, output_format) if p.merge else outs
+            merged = _merge_pieces(outs, p.merge, base, output_format) if p.merge else outs
+            results += _prefix_kit(merged)
         else:
             label = p.single_stem or ", ".join(p.stems) or short_name(p.model)
             progress(f"[{i}/{total}] {short_name(p.model)} -> {label} (this is the slow part)...")
