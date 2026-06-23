@@ -11,8 +11,10 @@ import argparse
 import os
 import re
 import sys
+import traceback
 
 from src import __version__
+from src.core import applog
 from src.core.engines import (
     CLI_PRESETS, STEM_OPTIONS, plan_text, resolve, category_model, DEFAULT_QUALITY,
 )
@@ -74,16 +76,22 @@ def do_run(selected, input_file, output_format="WAV", models=None, one_pass=None
     if not confirm_downloads(missing_models(passes, rhythm), assume_yes):
         print("  Cancelled (no models downloaded).")
         return 1
+    def _progress(m):
+        print(f"  {m}")
+        applog.write(m)
+
+    applog.write(f"Run: {input_file} -> {plan_text(selected, models, one_pass, quality, keep_all, kit_split, kit_source, residual)}")
     try:
         outputs = run(
             selected, input_file,
             output_format=output_format,
             models=models, one_pass=one_pass,
-            progress=lambda m: print(f"  {m}"),
+            progress=_progress,
             quality=quality, keep_all=keep_all,
             kit_split=kit_split, kit_source=kit_source, residual=residual,
         )
     except Exception as e:
+        applog.write(f"Separation failed: {e!r}\n" + traceback.format_exc().rstrip())
         print(f"\n  Error: {e}")
         return 1
     print("\n  Stems written:")
@@ -147,6 +155,7 @@ def run_tui():
 def main(argv=None):
     from chotic_ui import bootstrap
     bootstrap("Stemchotic")
+    applog.init(__version__)
     parser = argparse.ArgumentParser(prog="stemchotic", description="Easy stem separation.")
     parser.add_argument("preset", nargs="?", help="Preset key (see --list), or the input file")
     parser.add_argument("input", nargs="?", help="Input audio file")
