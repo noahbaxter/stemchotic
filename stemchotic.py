@@ -100,11 +100,26 @@ def do_run(selected, input_file, output_format="WAV", models=None, one_pass=None
     return 0
 
 
+# The app owns its window size (it ships in app.zip and auto-updates, unlike the
+# frozen launcher), so bump these as the UI grows. 90 cols fits the 81-wide
+# banner; rows are sized to the picker with a little headroom.
+UI_COLS, UI_ROWS = 90, 30
+
+
+def _fit_window():
+    """Size the terminal to the app's UI. WezTerm (and most terminals) honor this
+    XTWINOPS resize escape on every platform; non-supporting terminals ignore it."""
+    if sys.stdout.isatty():
+        sys.stdout.write(f"\x1b[8;{UI_ROWS};{UI_COLS}t")
+        sys.stdout.flush()
+
+
 def run_tui():
     from chotic_ui import clear_screen, input_with_esc, CancelInput, configure_header, set_theme
     from src.banner import BANNER
     from src.screens import show_stem_picker, new_state
 
+    _fit_window()
     set_theme("kanagawa")
     configure_header(BANNER, __version__)
 

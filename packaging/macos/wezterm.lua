@@ -5,7 +5,7 @@ local wezterm = require 'wezterm'
 local config = wezterm.config_builder()
 
 config.initial_cols = 90
-config.initial_rows = 40
+config.initial_rows = 30
 config.enable_tab_bar = false
 config.window_close_confirmation = 'NeverPrompt'
 config.exit_behavior = 'Close'

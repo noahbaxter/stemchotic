@@ -931,15 +931,6 @@ def error_exit(message: str) -> NoReturn:
     sys.exit(1)
 
 
-def set_terminal_size(cols: int = 90, rows: int = 40):
-    """Set terminal window size. Works on cmd.exe and PowerShell, not Windows Terminal."""
-    if sys.platform == "win32":
-        os.system(f"mode con: cols={cols} lines={rows}")
-    else:
-        # macOS/Linux: ANSI escape sequence
-        print(f"\x1b[8;{rows};{cols}t", end="", flush=True)
-
-
 def clean_install():
     """Delete the installed app, env, and tooling. Keeps models unless confirmed."""
     root = get_root_dir()
@@ -961,7 +952,6 @@ def main():
         return
     maybe_relaunch_in_host()  # may re-exec into WezTerm and not return
 
-    set_terminal_size(90, 40)
     init_logging()
     log(f"Launcher v{LAUNCHER_VERSION}")
     ensure_linux_desktop()  # no-op off Linux
