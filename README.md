@@ -8,12 +8,15 @@ which does the actual separation using models from
 [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui),
 Demucs, and the BS-RoFormer family.
 
+![Stemchotic](docs/screenshot.png)
+
+#### [Download](https://github.com/noahbaxter/stemchotic/releases/latest) now for macOS, Windows, and Linux.
+
 ## Status
 
 Stemchotic is currently in Beta on macOS, Windows, and Linux with all primary features functional.
 
-- Pick the stems you want by name and Stemchotic suggests the best model you should probably be using for that part!
-- Up to 7 stems: vocals, instrumental, drums, bass, guitar, piano, other.
+- Pick the parts you want (up to 7: vocals, instrumental, drums, bass, guitar, piano, other). Stemchotic picks a strong default model for each, but you're welcome to pick your own whenever you like.
 - Drum-kit splitting into kick / snare / toms / cymbals (4/5/6-piece).
 - Routes to strong open models (BS-RoFormer, DrumSep, Demucs) and sets up GPU-acceleration if your hardware would benefit from it.
 - Interactive TUI or one-line CLI; WAV / FLAC / MP3, output saved next to your file.
@@ -36,8 +39,7 @@ open the **Assets** list, and download the file for your computer:
 1. Download `stemchotic-launcher-linux`, mark it executable, and run it from a terminal.
 
 The first launch sets everything up for you (it downloads Python and the audio
-engine, about 1-2.5 GB depending on your hardware), so give it a few minutes. After
-that it opens in seconds.
+engine, about 1-2.5 GB depending on your hardware), so give it a few minutes. After that it should open in seconds. Separation models automatically download the first time you use each one (roughly 50-670 MB apiece) and are cached afterward. The model list comes from python-audio-separator, with a `models.json` overlay in this repo adding curated quality rankings and a few open-weight extras (DrumSep, BS-Roformer-SW); each model is pulled from its public host (the UVR repo, or the authors' repos) on first use.
 
 ## Using it
 
