@@ -31,8 +31,13 @@ def main():
     master.save(win, sizes=[(16, 16), (24, 24), (32, 32), (48, 48),
                             (64, 64), (128, 128), (256, 256)])
 
+    # macOS: feed a fully OPAQUE square (no alpha channel) and let macOS apply its
+    # own squircle mask. An icns *with* an alpha channel makes macOS treat it as a
+    # custom icon and composite it onto its generic light plate; an opaque one is
+    # used directly and masked to the rounded-rect, filling the whole tile.
     icns = ROOT / "packaging" / "macos" / "Stemchotic.icns"
     if sys.platform == "darwin":
+        mac_master = master.convert("RGB")
         specs = [(16, "16x16"), (32, "16x16@2x"), (32, "32x32"), (64, "32x32@2x"),
                  (128, "128x128"), (256, "128x128@2x"), (256, "256x256"),
                  (512, "256x256@2x"), (512, "512x512"), (1024, "512x512@2x")]
@@ -40,7 +45,7 @@ def main():
             iconset = Path(tmp) / "Stemchotic.iconset"
             iconset.mkdir()
             for px, name in specs:
-                master.resize((px, px), Image.LANCZOS).save(iconset / f"icon_{name}.png")
+                mac_master.resize((px, px), Image.LANCZOS).save(iconset / f"icon_{name}.png")
             subprocess.run(["iconutil", "-c", "icns", "-o", str(icns), str(iconset)],
                            check=True)
     else:

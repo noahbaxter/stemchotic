@@ -64,9 +64,9 @@ TIC = r"""
 
 WORDS = [STEM, CHO, TIC]
 GAP_ROWS = 1          # blank rows between words
-MARGIN_CELLS = 9      # blank cells around the text block, inside the ring
+MARGIN_CELLS = 5      # blank cells around the text block, inside the ring
 LETTER_Y_NUDGE = 1.3  # push the letters down by this fraction of a cell height
-EDGE_CELLS = 3        # outer cells reserved for the ASCII frame (frame + gap)
+EDGE_CELLS = 0        # outer cells reserved for the ASCII frame (0 = no frame)
 
 
 def lerp(c1, c2, t):
@@ -83,19 +83,20 @@ def gradient_color(pos):
 
 
 def add_frame(grid, gw, gh):
-    """Draw a double-line ASCII box on the outermost ring of cells."""
+    """Draw a rounded-corner ASCII box on the outermost ring of cells, so the
+    frame follows the macOS squircle mask."""
     cells = set()
 
     def put(r, c, ch):
         grid[r][c] = ch
         cells.add((r, c))
 
-    put(0, 0, "╔"); put(0, gw - 1, "╗")
-    put(gh - 1, 0, "╚"); put(gh - 1, gw - 1, "╝")
+    put(0, 0, "╭"); put(0, gw - 1, "╮")
+    put(gh - 1, 0, "╰"); put(gh - 1, gw - 1, "╯")
     for c in range(1, gw - 1):
-        put(0, c, "═"); put(gh - 1, c, "═")
+        put(0, c, "─"); put(gh - 1, c, "─")
     for r in range(1, gh - 1):
-        put(r, 0, "║"); put(r, gw - 1, "║")
+        put(r, 0, "│"); put(r, gw - 1, "│")
     return cells
 
 
@@ -136,7 +137,7 @@ def build_grid():
                 grid[y0 + r][x0 + c] = ch
                 text_cells.add((y0 + r, x0 + c))
 
-    frame_cells = add_frame(grid, grid_w, grid_h)
+    frame_cells = add_frame(grid, grid_w, grid_h) if EDGE_CELLS else set()
     return grid, grid_w, grid_h, core_w, core_h, text_cells, frame_cells
 
 
@@ -166,7 +167,7 @@ def render(out_path="stemchotic_logo.png", size=1024):
             draw.ellipse((cx0 - rad, cy0 - rad, cx0 + rad, cy0 + rad), fill=col + (255,))
 
     # Find a font size where the grid fits within ~92% of the canvas.
-    target = size * 0.92
+    target = size * 0.99
     fs = 8
     font = None
     char_w = char_h = 1
