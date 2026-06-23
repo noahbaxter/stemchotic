@@ -291,6 +291,33 @@ def ensure_linux_desktop():
         log(f"desktop install skipped: {e}")
 
 
+def uninstall():
+    """Remove everything the launcher installed: the cache (python runtime, venv,
+    app, models, tools), saved state, logs, and on Linux the .desktop entry +
+    icon. Leaves the launcher executable itself in place."""
+    targets = [cache_dir(), data_dir(), log_dir()]
+    if sys.platform.startswith("linux"):
+        share = Path(os.environ.get("XDG_DATA_HOME") or (Path.home() / ".local" / "share"))
+        targets.append(share / "applications" / "stemchotic.desktop")
+        targets.append(share / "icons" / "hicolor" / "256x256" / "apps" / "stemchotic.png")
+    print("\nThis removes Stemchotic's installed files:")
+    for t in targets:
+        print(f"  {t}")
+    print("  (the launcher executable itself is left in place)")
+    if _has_terminal() and choice_key("\nProceed? [y/N] ", "yn", default="n") != "y":
+        print("Cancelled.")
+        return
+    for t in targets:
+        try:
+            if t.is_dir():
+                shutil.rmtree(t, ignore_errors=True)
+            elif t.exists():
+                t.unlink()
+        except Exception as e:
+            print(f"  could not remove {t}: {e}")
+    print("\nUninstalled. Delete the launcher executable to finish.")
+
+
 def get_app_dir() -> Path:
     """Get the extracted app directory. Dev channel uses separate dir to coexist with production."""
     subdir = "_app_dev" if RELEASE_TAG else "_app"
@@ -910,6 +937,9 @@ def clean_install():
 
 
 def main():
+    if "--uninstall" in sys.argv:
+        uninstall()
+        return
     maybe_relaunch_in_host()  # may re-exec into WezTerm and not return
 
     set_terminal_size(90, 40)

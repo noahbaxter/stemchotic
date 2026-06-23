@@ -64,6 +64,7 @@ own size prompt. Pass `-y/--yes` to stemchotic (or use a CLI preset with
 | `--clean` | Reinstalls the app and env; asks before touching downloaded models |
 | `--setup` | Re-runs the hardware/GPU question |
 | `--offline` | Skips the update check and launches from the local install |
+| `--uninstall` | Removes everything it installed (cache, state, logs, menu entry); leaves the launcher |
 
 ### From source (developers)
 
