@@ -779,6 +779,21 @@ def ensure_env(hardware: str | None = None):
             ensure_env(hardware="cpu")
             return
         error_exit("Dependency install failed. See uv output above.")
+    # A wheel can install cleanly yet fail to import at runtime (e.g. a GPU build
+    # whose CUDA version doesn't match torch's). Verify the audio engine actually
+    # loads; if a non-CPU tier can't, rebuild on CPU instead of shipping a broken
+    # env that errors only when the user runs a separation.
+    smoke = subprocess.run([str(env_python()), "-c", "import audio_separator.separator"],
+                           cwd=get_app_dir(), env=env)
+    if smoke.returncode != 0:
+        if hardware != "cpu":
+            print("\n  GPU audio engine failed to load. Falling back to CPU (re-run with --setup to retry GPU).")
+            log("audio_separator import failed, falling back to cpu")
+            state = read_state(); state["hardware"] = "cpu"; write_state(state)
+            shutil.rmtree(get_env_dir(), ignore_errors=True)
+            ensure_env(hardware="cpu")
+            return
+        error_exit("The audio engine failed to load. See output above.")
     # Pre-fetch deps that download binaries on first use, so the first run needs
     # no extra download. static-ffmpeg pulls ffmpeg/ffprobe here. Best-effort:
     # if it fails (e.g. offline), the app fetches them lazily on first use.
