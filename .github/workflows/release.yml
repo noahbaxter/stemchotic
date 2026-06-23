@@ -39,10 +39,10 @@ jobs:
             artifact: Stemchotic.dmg
           - os: windows-latest
             name: windows
-            artifact: stemchotic.exe
+            artifact: Stemchotic.exe
           - os: ubuntu-latest
             name: linux
-            artifact: stemchotic
+            artifact: Stemchotic
 
     runs-on: ${{ matrix.os }}
 
@@ -124,7 +124,7 @@ jobs:
         if: matrix.name == 'windows'
         run: |
           $CERTIFI_PATH = python -c "import certifi; print(certifi.where())"
-          pyinstaller --onefile --name stemchotic --clean --noconfirm `
+          pyinstaller --onefile --name Stemchotic --clean --noconfirm `
             --icon packaging/windows/stemchotic.ico `
             --add-data "$CERTIFI_PATH;certifi" `
             --add-data "packaging/macos/wezterm.lua;." `
@@ -136,7 +136,7 @@ jobs:
         if: matrix.name == 'linux'
         run: |
           CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())")
-          pyinstaller --onefile --name stemchotic --clean --noconfirm \
+          pyinstaller --onefile --name Stemchotic --clean --noconfirm \
             --add-data "$CERTIFI_PATH:certifi" \
             --add-data "packaging/linux/stemchotic.png:." \
             --hidden-import certifi \
@@ -180,8 +180,8 @@ jobs:
           for f in \
             artifacts/app/app.zip \
             artifacts/Stemchotic.dmg/Stemchotic.dmg \
-            artifacts/stemchotic.exe/stemchotic.exe \
-            artifacts/stemchotic/stemchotic; do
+            artifacts/Stemchotic.exe/Stemchotic.exe \
+            artifacts/Stemchotic/Stemchotic; do
             [ -f "$f" ] && ASSETS+=("$f") || echo "::warning::missing asset $f (skipped)"
           done
 
