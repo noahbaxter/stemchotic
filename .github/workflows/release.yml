@@ -39,10 +39,10 @@ jobs:
             artifact: Stemchotic.dmg
           - os: windows-latest
             name: windows
-            artifact: stemchotic-launcher.exe
+            artifact: stemchotic.exe
           - os: ubuntu-latest
             name: linux
-            artifact: stemchotic-launcher-linux
+            artifact: stemchotic
 
     runs-on: ${{ matrix.os }}
 
@@ -124,7 +124,7 @@ jobs:
         if: matrix.name == 'windows'
         run: |
           $CERTIFI_PATH = python -c "import certifi; print(certifi.where())"
-          pyinstaller --onefile --name stemchotic-launcher --clean --noconfirm `
+          pyinstaller --onefile --name stemchotic --clean --noconfirm `
             --icon packaging/windows/stemchotic.ico `
             --add-data "$CERTIFI_PATH;certifi" `
             --add-data "packaging/macos/wezterm.lua;." `
@@ -136,7 +136,7 @@ jobs:
         if: matrix.name == 'linux'
         run: |
           CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())")
-          pyinstaller --onefile --name stemchotic-launcher-linux --clean --noconfirm \
+          pyinstaller --onefile --name stemchotic --clean --noconfirm \
             --add-data "$CERTIFI_PATH:certifi" \
             --add-data "packaging/linux/stemchotic.png:." \
             --hidden-import certifi \
@@ -180,8 +180,8 @@ jobs:
           for f in \
             artifacts/app/app.zip \
             artifacts/Stemchotic.dmg/Stemchotic.dmg \
-            artifacts/stemchotic-launcher.exe/stemchotic-launcher.exe \
-            artifacts/stemchotic-launcher-linux/stemchotic-launcher-linux; do
+            artifacts/stemchotic.exe/stemchotic.exe \
+            artifacts/stemchotic/stemchotic; do
             [ -f "$f" ] && ASSETS+=("$f") || echo "::warning::missing asset $f (skipped)"
           done
 

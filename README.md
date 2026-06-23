@@ -32,11 +32,11 @@ open the **Assets** list, and download the file for your computer:
 3. Open **Stemchotic** from Applications (or Launchpad).
 
 **Windows 10/11**
-1. Download `stemchotic-launcher.exe`.
+1. Download `stemchotic.exe`.
 2. Double-click it. Windows will say "Windows protected your PC", that's normal for a new app: click **More info**, then **Run anyway**.
 
 **Linux**
-1. Download `stemchotic-launcher-linux`, mark it executable, and run it from a terminal.
+1. Download `stemchotic`, mark it executable, and run it from a terminal.
 
 The first launch sets everything up for you (it downloads Python and the audio
 engine, about 1-2.5 GB depending on your hardware), so give it a few minutes. After that it should open in seconds. Separation models automatically download the first time you use each one (roughly 50-670 MB apiece) and are cached afterward. The model list comes from python-audio-separator, with a `models.json` overlay in this repo adding curated quality rankings and a few open-weight extras (DrumSep, BS-Roformer-SW); each model is pulled from its public host (the UVR repo, or the authors' repos) on first use.

@@ -58,13 +58,13 @@ jobs:
         include:
           - os: macos-latest
             name: macos
-            artifact: stemchotic-launcher-macos
+            artifact: stemchotic-macos
           - os: windows-latest
             name: windows
-            artifact: stemchotic-launcher.exe
+            artifact: stemchotic.exe
           - os: ubuntu-latest
             name: linux
-            artifact: stemchotic-launcher-linux
+            artifact: stemchotic-linux
 
     runs-on: ${{ matrix.os }}
 
@@ -84,7 +84,7 @@ jobs:
         if: matrix.name == 'macos'
         run: |
           CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())")
-          pyinstaller --onefile --name stemchotic-launcher-macos --clean --noconfirm \
+          pyinstaller --onefile --name stemchotic-macos --clean --noconfirm \
             --add-data "$CERTIFI_PATH:certifi" \
             --hidden-import certifi \
             launcher.py
@@ -93,7 +93,7 @@ jobs:
         if: matrix.name == 'windows'
         run: |
           $CERTIFI_PATH = python -c "import certifi; print(certifi.where())"
-          pyinstaller --onefile --name stemchotic-launcher --clean --noconfirm `
+          pyinstaller --onefile --name stemchotic --clean --noconfirm `
             --icon packaging/windows/stemchotic.ico `
             --add-data "$CERTIFI_PATH;certifi" `
             --add-data "packaging/macos/wezterm.lua;." `
@@ -105,7 +105,7 @@ jobs:
         if: matrix.name == 'linux'
         run: |
           CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())")
-          pyinstaller --onefile --name stemchotic-launcher-linux --clean --noconfirm \
+          pyinstaller --onefile --name stemchotic-linux --clean --noconfirm \
             --add-data "$CERTIFI_PATH:certifi" \
             --add-data "packaging/linux/stemchotic.png:." \
             --hidden-import certifi \
