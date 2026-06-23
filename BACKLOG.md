@@ -79,6 +79,11 @@
 - Migrate synchotic onto the chotic-ui submodule too, so the toolkit has one home
   (stemchotic already uses it; synchotic still has its own copy).
 - Optional Gradio/desktop front-end for non-terminal users.
+- Broaden Linux support (0.9.0 is validated only on a modern-glibc + NVIDIA box,
+  run from a terminal). Known gaps, revisit if users complain: the launcher is
+  built on Ubuntu 24.04 (glibc 2.39) so it won't start on older distros (build on
+  manylinux_2_28 / Ubuntu 20.04 to fix); the CPU/AMD path is untested; the
+  .desktop double-click (Terminal=true) is untested and flaky on GNOME.
 
 ## Done
 - Extracted the TUI toolkit into the chotic-ui repo and submoduled it in
