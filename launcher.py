@@ -26,7 +26,7 @@ from urllib.request import Request, urlopen
 # The launcher's own version, independent of the app (app.zip) version. The
 # launcher is a frozen bootstrapper users download once; only bump this when
 # launcher.py itself changes, not on every app release.
-LAUNCHER_VERSION = "1.0"
+LAUNCHER_VERSION = "1.1"
 RELEASE_TAG = ""  # Injected to "dev-latest" for dev launcher builds
 PYTHON_VERSION = "3.12"
 UV_VERSION = "0.7.13"
@@ -1056,6 +1056,7 @@ def main():
     args = [str(env_python()), str(app_entry)] + filtered_args
     env = _child_env()
     env["STEMCHOTIC_ROOT"] = str(get_root_dir())
+    env["STEMCHOTIC_LAUNCHER_VERSION"] = LAUNCHER_VERSION   # app nags if it's behind
     close_logging()
     sys.stdout.flush()  # execve discards unflushed buffers (piped stdout)
     if sys.platform == "win32":

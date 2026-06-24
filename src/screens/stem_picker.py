@@ -15,6 +15,7 @@ the app closes.
 
 from chotic_ui import Colors, TwoPane, visible_len
 from ..core.engines import STEM_OPTIONS, plan_text, display_model, short_name, DEFAULT_QUALITY
+from ..core.updates import launcher_outdated, RELEASES_URL
 from .model_picker import show_model_overlay
 
 _LEFT_W = 40   # left pane width; wide enough for the stem name + its model column
@@ -161,7 +162,13 @@ def _build_pane(state: dict) -> TwoPane:
                 f"{Colors.PRIMARY}M{Colors.MUTED} models  "
                 f"{Colors.PRIMARY}S{Colors.MUTED} start splitting  "
                 f"{Colors.PRIMARY}Esc{Colors.MUTED} quit{Colors.RESET}")
-        return f"{keys}\n  {Colors.DIM}{plan}{Colors.RESET}"
+        rows = []
+        if launcher_outdated():   # frozen launcher behind the app; WezTerm linkifies the URL
+            rows.append(f"  {Colors.INFO}{Colors.BOLD}New launcher available, re-download:{Colors.RESET}"
+                        f"{Colors.INFO} {RELEASES_URL}{Colors.RESET}")
+        rows.append(keys)
+        rows.append(f"  {Colors.DIM}{plan}{Colors.RESET}")
+        return "\n".join(rows)
 
     return TwoPane(
         title="Stemchotic", subtitle="Space picks stems  ·  M for models  ·  S to split",
