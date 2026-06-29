@@ -67,7 +67,7 @@ jobs:
       - name: Point the launcher at the dev channel
         # Build-time flip of launcher.py:30 so this binary reads /releases/tags/
         # dev-latest and installs to _app_dev. Cross-platform (runs on all 3 OSes).
-        run: python -c "p='launcher.py'; s=open(p,encoding='utf-8').read(); assert 'RELEASE_TAG = \"\"  #' in s, 'RELEASE_TAG anchor not found'; open(p,'w',encoding='utf-8').write(s.replace('RELEASE_TAG = \"\"  #', 'RELEASE_TAG = \"dev-latest\"  #', 1)); print('injected dev-latest')"
+        run: python packaging/set_release_channel.py dev-latest
 
       - name: Check for Apple signing secrets
         if: matrix.name == 'macos'
