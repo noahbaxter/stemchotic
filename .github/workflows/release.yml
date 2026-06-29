@@ -164,6 +164,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4   # for CHANGELOG.md (release notes source)
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -190,5 +193,14 @@ jobs:
             gh release upload "$TAG" "${ASSETS[@]}" --clobber
           else
             echo "Creating new release $TAG..."
-            gh release create "$TAG" --generate-notes "${ASSETS[@]}"
+            # Publish the CHANGELOG section for this version; fall back to
+            # generated notes only if no section exists.
+            VERSION="${TAG#v}"
+            awk -v v="## ${VERSION}" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md > notes.md
+            if [ -s notes.md ]; then
+              gh release create "$TAG" --notes-file notes.md "${ASSETS[@]}"
+            else
+              echo "::warning::no CHANGELOG.md section for ${VERSION}; using generated notes"
+              gh release create "$TAG" --generate-notes "${ASSETS[@]}"
+            fi
           fi
