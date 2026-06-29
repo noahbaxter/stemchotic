@@ -15,6 +15,7 @@ import traceback
 
 from src import __version__
 from src.core import applog
+from src.core import device
 from src.core.engines import (
     CLI_PRESETS, STEM_OPTIONS, plan_text, resolve, category_model, DEFAULT_QUALITY,
 )
@@ -180,6 +181,10 @@ def main(argv=None):
     if args.list:
         list_presets()
         return 0
+
+    # Honor a saved CPU/GPU choice before anything imports torch. Re-execs once
+    # (instantly, same env) only when CPU fallback is active; no-op otherwise.
+    device.apply_pref_at_startup()
 
     # Disambiguate the positionals. With one positional that isn't a known preset,
     # treat it as the input (no preset) when it's an existing file OR when

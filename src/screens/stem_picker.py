@@ -14,6 +14,7 @@ the app closes.
 """
 
 from chotic_ui import Colors, TwoPane, visible_len
+from ..core import device, prefs
 from ..core.engines import STEM_OPTIONS, plan_text, display_model, short_name, DEFAULT_QUALITY
 from ..core.updates import launcher_outdated, RELEASES_URL
 from .model_picker import show_model_overlay
@@ -35,16 +36,21 @@ SET_QUALITY = ("set", "quality")
 SET_SCOPE = ("set", "scope")
 SET_SPLIT = ("set", "split")
 SET_SOURCE = ("set", "source")
+SET_DEVICE = ("set", "device")
+_DEVICE_LABEL = {"gpu": "GPU", "cpu": "CPU"}
 
 # Left-pane row values.
 ROW_RESIDUAL = ("residual",)
 
 
 def new_state() -> dict:
-    """Fresh, session-long picker state."""
-    return {"selected": set(), "output_format": "WAV", "models": {},
-            "one_pass": None, "quality": DEFAULT_QUALITY, "keep_all": False,
-            "residual": False, "kit_split": "off", "kit_source": "song"}
+    """Fresh picker state. Saved settings + per-stem model picks are restored;
+    stem selection and one-pass always start empty."""
+    state = {"selected": set(), "output_format": "WAV", "models": {},
+             "one_pass": None, "quality": DEFAULT_QUALITY, "keep_all": False,
+             "residual": False, "kit_split": "off", "kit_source": "song"}
+    state.update(prefs.load())
+    return state
 
 
 def _cycle(seq, cur):
@@ -67,6 +73,7 @@ def show_stem_picker(state: dict) -> dict | None:
     while True:
         pane = _build_pane(state)
         ret = pane.run()
+        prefs.save(state)   # persist any setting/model change from this interaction
         if ret is None:
             return None
         ret = ret.lower()
@@ -96,6 +103,10 @@ def _build_pane(state: dict) -> TwoPane:
     # waiting for the pane to be rebuilt.
     selected: set = state["selected"]
     models = state["models"]
+    # Compute toggle: a CPU fallback for GPU installs. Read once (switching
+    # re-execs the process, so it can't change within this pane's lifetime).
+    dev_available = device.gpu_toggle_available()
+    dev_pref = device.read_device_pref()
 
     # --- left pane: stems + Residual ---
     def left_rows():
@@ -138,6 +149,11 @@ def _build_pane(state: dict) -> TwoPane:
                 (_opt_render("Split", ["Off", "4", "5", "6"], split), SET_SPLIT, True),
                 (_opt_render("Source", ["Full song", "Drum stem"], _SOURCE_LABEL[state["kit_source"]]), SET_SOURCE, True),
             ]
+        if dev_available:
+            rows += [
+                (lambda f, c: "", SECTION, False),
+                (_opt_render("Compute", ["GPU", "CPU"], _DEVICE_LABEL[dev_pref]), SET_DEVICE, True),
+            ]
         return rows
 
     def on_right_enter(val):
@@ -151,6 +167,10 @@ def _build_pane(state: dict) -> TwoPane:
             state["kit_split"] = _cycle(KIT_SPLITS, state["kit_split"])
         elif val == SET_SOURCE:
             state["kit_source"] = _cycle(KIT_SOURCES, state["kit_source"])
+        elif val == SET_DEVICE:
+            # Persist pending changes first: switch_device re-execs and never returns.
+            prefs.save(state)
+            device.switch_device("cpu" if dev_pref == "gpu" else "gpu")
 
     def footer():
         # Recomputed each frame so the plan reflects live toggles.
