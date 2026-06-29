@@ -4,11 +4,13 @@
 # The audio-separator README does not pin a torch index; it says to install
 # PyTorch "using the command recommended by the wizard at
 # https://pytorch.org/get-started/locally/". On Windows the PyPI torch wheel
-# is CPU-only, so we add the pytorch.org cu124 index. On Linux the PyPI wheel
+# is CPU-only, so we add the pytorch.org cu128 index. On Linux the PyPI wheel
 # already bundles CUDA, so the extra index is redundant but harmless there.
---extra-index-url https://download.pytorch.org/whl/cu124
+# cu128 is the first index with Blackwell (sm_120) kernels, so RTX 50-series
+# cards work; it still ships sm_50-sm_90, so older GPUs keep working too.
+--extra-index-url https://download.pytorch.org/whl/cu128
 audio-separator[gpu]==0.44.2
-# Pin onnxruntime-gpu to a CUDA 12 build to match torch's cu124 wheels. Left
+# Pin onnxruntime-gpu to a CUDA 12 build to match torch's cu128 wheels. Left
 # unpinned, audio-separator[gpu] pulls the latest (1.27+), which is built for
 # CUDA 13 and dies at runtime with "libcudart.so.13: cannot open shared object
 # file" since torch only ships the CUDA 12 runtime.
