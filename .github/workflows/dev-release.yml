@@ -1,0 +1,213 @@
+name: Dev Release
+
+# Rolling beta channel. Every push to dev rebuilds app.zip + signed launchers and
+# updates the `dev-latest` prerelease. Dev launchers carry RELEASE_TAG=dev-latest,
+# so they pull from this prerelease and install to _app_dev (coexists with prod).
+# Marked prerelease, so /releases/latest (what production launchers read) stays on
+# the newest v* tag and never sees beta builds. Mirrors release.yml; the only
+# differences are the trigger, the RELEASE_TAG injection, and the fixed dev tag.
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: write
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Build app.zip
+        run: |
+          git ls-files | grep -v '^libs/chotic-ui$' | zip -q app.zip -@
+          (cd libs/chotic-ui && git ls-files | sed 's|^|libs/chotic-ui/|') | zip -q app.zip -@
+          echo "$(cat src/__init__.py | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+')-dev" > .version && zip -q app.zip .version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: app.zip
+
+  launcher:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macos
+            artifact: Stemchotic.dmg
+          - os: windows-latest
+            name: windows
+            artifact: Stemchotic.exe
+          - os: ubuntu-latest
+            name: linux
+            artifact: Stemchotic
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Point the launcher at the dev channel
+        # Build-time flip of launcher.py:30 so this binary reads /releases/tags/
+        # dev-latest and installs to _app_dev. Cross-platform (runs on all 3 OSes).
+        run: python -c "p='launcher.py'; s=open(p,encoding='utf-8').read(); assert 'RELEASE_TAG = \"\"  #' in s, 'RELEASE_TAG anchor not found'; open(p,'w',encoding='utf-8').write(s.replace('RELEASE_TAG = \"\"  #', 'RELEASE_TAG = \"dev-latest\"  #', 1)); print('injected dev-latest')"
+
+      - name: Check for Apple signing secrets
+        if: matrix.name == 'macos'
+        id: signing
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_APPLICATION }}
+        run: |
+          if [ -n "$APPLE_CERTIFICATE" ]; then
+            echo "available=true" >> $GITHUB_OUTPUT
+          else
+            echo "available=false" >> $GITHUB_OUTPUT
+            echo "::warning::Apple signing secrets not configured, building unsigned"
+          fi
+
+      - name: Import Apple certificate
+        if: matrix.name == 'macos' && steps.signing.outputs.available == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_APPLICATION }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
+          security import $RUNNER_TEMP/certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+
+          curl -sO https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          # The .p12 already bundles the Developer ID G2 intermediate, so this is
+          # best-effort: tolerate "already exists" instead of failing the build.
+          security import DeveloperIDG2CA.cer -k "$KEYCHAIN_PATH" || true
+
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+          xcrun notarytool store-credentials "notarytool-profile" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD"
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+          echo "APP_IDENTITY=Developer ID Application: Noah Baxter ($APPLE_TEAM_ID)" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        run: pip install pyinstaller certifi
+
+      - name: Build, sign and notarize the macOS app (DMG)
+        if: matrix.name == 'macos' && steps.signing.outputs.available == 'true'
+        env:
+          PYTHON: python
+          MACOS_SIGN_IDENTITY: ${{ env.APP_IDENTITY }}
+          NOTARY_PROFILE: notarytool-profile
+        run: |
+          bash packaging/macos/build_app.sh      # assemble Stemchotic.app (launcher + WezTerm)
+          bash packaging/macos/sign_and_dmg.sh   # Developer ID sign + notarize + DMG
+
+      - name: Build launcher (Windows)
+        if: matrix.name == 'windows'
+        run: |
+          $CERTIFI_PATH = python -c "import certifi; print(certifi.where())"
+          pyinstaller --onefile --name Stemchotic --clean --noconfirm `
+            --icon packaging/windows/stemchotic.ico `
+            --add-data "$CERTIFI_PATH;certifi" `
+            --add-data "packaging/macos/wezterm.lua;." `
+            --hidden-import certifi `
+            launcher.py
+        shell: pwsh
+
+      - name: Build launcher (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          CERTIFI_PATH=$(python -c "import certifi; print(certifi.where())")
+          pyinstaller --onefile --name Stemchotic --clean --noconfirm \
+            --add-data "$CERTIFI_PATH:certifi" \
+            --add-data "packaging/linux/stemchotic.png:." \
+            --hidden-import certifi \
+            launcher.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+
+      - name: Clean up keychain
+        if: matrix.name == 'macos' && always()
+        run: |
+          if [ -n "$KEYCHAIN_PATH" ] && [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+
+  release:
+    needs: [app, launcher]
+    # Publish whatever built, even if a platform fails (e.g. macOS notarization).
+    # app.zip is required (it's what testers' launchers auto-pull); the rest fill
+    # in when present, and a re-run later adds any missing platform asset.
+    if: ${{ always() && needs.app.result == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Update the dev-latest prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG="dev-latest"
+
+          ASSETS=()
+          for f in \
+            artifacts/app/app.zip \
+            artifacts/Stemchotic.dmg/Stemchotic.dmg \
+            artifacts/Stemchotic.exe/Stemchotic.exe \
+            artifacts/Stemchotic/Stemchotic; do
+            [ -f "$f" ] && ASSETS+=("$f") || echo "::warning::missing asset $f (skipped)"
+          done
+
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Updating existing $TAG prerelease..."
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
+          else
+            echo "Creating $TAG prerelease..."
+            gh release create "$TAG" \
+              --target dev --prerelease \
+              --title "Dev (rolling beta)" \
+              --notes "Rolling beta build from the dev branch. Not for production. Dev launchers auto-update from here." \
+              "${ASSETS[@]}"
+          fi
