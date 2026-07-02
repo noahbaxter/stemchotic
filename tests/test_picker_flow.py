@@ -74,6 +74,30 @@ def test_compute_toggle_appears_and_fires_for_gpu_installs(picker):
     assert calls == ["cpu"], "Spacebar on Compute should switch GPU -> CPU"
 
 
+def test_restoring_drum_stem_mode_keeps_an_escape_hatch(picker):
+    # Regression (reported by a user on 2026-07-01): "Drum stem" mode (kit_source
+    # ="stem") disables the whole left pane, and the only way back to "song" is
+    # the Source toggle, which only renders when "Drums" is selected. Selection
+    # used to reset every session, so a restored kit_source="stem" landed with
+    # nothing selected: left pane disabled, Source toggle invisible, no way out.
+    # Fix: persist selected and kit_source TOGETHER, so the restored session keeps
+    # the toggle reachable. This drives real keys to prove the escape hatch works,
+    # not just that the values round-trip.
+    prefs.save({"selected": {"Drums"}, "kit_source": "stem"}, picker.state_file)
+
+    restored = stem_picker.new_state()
+    assert restored["kit_source"] == "stem" and restored["selected"] == {"Drums"}, (
+        "setup sanity: both must restore for this scenario to be meaningful"
+    )
+
+    # Tab to settings; Down past Format/Quality/Scope/Split to Source; flip it back.
+    picker([KEY_TAB, KEY_DOWN, KEY_DOWN, KEY_DOWN, KEY_DOWN, KEY_SPACE, KEY_ESC])
+    assert prefs.load(picker.state_file)["kit_source"] == "song", (
+        "Source toggle must be reachable even when a restored session starts "
+        "already in drum-stem mode - this is the escape hatch that prevents lockout"
+    )
+
+
 def test_no_compute_row_without_a_gpu_install(picker):
     # Default tier (no gpu): toggling should never fire even if we land where the
     # row would be. read_device_pref/switch_device stay real; just assert no exec.
