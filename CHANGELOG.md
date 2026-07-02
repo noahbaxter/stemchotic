@@ -5,6 +5,11 @@ publishes the matching `## <version>` section as the GitHub release notes.
 Keep entries short and plain, and only list things a user actually sees or
 notices. No internals (build, CI, tests, refactors).
 
+## 0.9.6
+- Clearer drum splitting: the stem list no longer greys out, and the drum-kit
+  options (Split, and Song vs Drum stem input) are now grouped and only active
+  when Drums is selected.
+
 ## 0.9.5
 - Fixed a bug where using "Drum stem" mode could lock the stem picker after
   restarting the app.
