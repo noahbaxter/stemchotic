@@ -64,7 +64,7 @@ CLI_PRESETS = {
     "kit":          {"selected": ["Drums"], "kit_split": "5"},
     "kit4":         {"selected": ["Drums"], "kit_split": "4"},
     "kit6":         {"selected": ["Drums"], "kit_split": "6"},
-    "kitsplit":     {"selected": [], "kit_split": "5", "kit_source": "stem"},
+    "kitsplit":     {"selected": ["Drums"], "kit_split": "5", "kit_source": "stem"},
 }
 
 
@@ -135,14 +135,16 @@ def resolve(selected: list[str], models: dict | None = None, one_pass: str | Non
     `one_pass`: a single model to run for the whole selection (cross-category),
     filtered to the selected stems.
     `quality`: session quality tier picking each category's model.
-    `kit_split`/`kit_source`: drum-kit run config. source=stem treats the input
-    as a drum stem and runs ONE direct DrumSep pass (the only pass). source=song
-    appends a cascade kit pass when split != "off" and Drums is selected.
+    `kit_split`/`kit_source`: drum-kit run config, both only meaningful when Drums
+    is selected. source=stem treats the input as a drum stem and runs ONE direct
+    DrumSep pass; source=song appends a cascade kit pass when split != "off". A
+    stray source=stem with Drums unselected is inert (a persisted preference must
+    never hijack a non-drum run), so the picker greys the Drum Options out then.
 
     Non-kit passes that resolve to the SAME model file are merged into one pass
     (e.g. on Best, rhythm + extra both map to RoFormer SW -> a single pass).
     """
-    if kit_source == "stem":               # input is the drum stem: one direct pass
+    if kit_source == "stem" and "Drums" in selected:   # input is a drum stem: one direct pass
         lay = KIT_LAYOUTS[kit_split if kit_split != "off" else "5"]
         kmodel = (models or {}).get("kit", lay["model"])
         return [Pass(engine="kit", model=kmodel, stems=[], cascade_drums=False,
@@ -190,7 +192,7 @@ def plan_text(selected: list[str], models: dict | None = None, one_pass: str | N
               kit_split: str = "off", kit_source: str = "song", residual: bool = False) -> str:
     """One-line description of what the current selection will run. `keep_all`
     keeps every stem each model emits instead of trimming to the selection."""
-    if not selected and kit_source != "stem":
+    if not selected:
         return "Nothing selected - pick stems with Space, then Start splitting."
 
     if one_pass:

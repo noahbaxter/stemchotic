@@ -26,8 +26,15 @@ FORMATS = ["WAV", "FLAC", "MP3"]
 QUALITIES = ["best", "fast"]
 KIT_SPLITS = ["off", "4", "5", "6"]
 KIT_SOURCES = ["song", "stem"]
+# Faintest readable shade for a shown-but-inert row: the DIM attribute over the
+# darkest palette grey. Used for the greyed-out Drum Options when Drums is unpicked.
+_FADE = Colors.DIM + Colors.MUTED_DIM
 _QUALITY_LABEL = {"best": "Best", "fast": "Fast"}
-_SOURCE_LABEL = {"song": "Full song", "stem": "Drum stem"}
+_SOURCE_LABEL = {"song": "Song", "stem": "Drum stem"}
+_SOURCE_HINT = {
+    "song": "Song: extract drums from the mix, then split the kit",
+    "stem": "Drum stem: input is already a drum stem, split it directly",
+}
 
 # Right-pane row values.
 SECTION = ("section",)           # non-selectable header sentinel
@@ -112,14 +119,8 @@ def _build_pane(state: dict) -> TwoPane:
     def left_rows():
         quality = state["quality"]
         one_pass = state.get("one_pass")
-        drum_stem = state["kit_source"] == "stem"
-        rows = []
-        for opt in STEM_OPTIONS:
-            rows.append((_stem_render(opt, selected, models, quality, one_pass, drum_stem),
-                         ("stem", opt.name), True))
-        if drum_stem:
-            rows.append((lambda f, c: f"  {Colors.MUTED}input treated as a drum stem{Colors.RESET}",
-                         SECTION, False))
+        rows = [(_stem_render(opt, selected, models, quality, one_pass),
+                 ("stem", opt.name), True) for opt in STEM_OPTIONS]
         rows.append((_residual_render(state), ROW_RESIDUAL, True))
         return rows
 
@@ -129,8 +130,6 @@ def _build_pane(state: dict) -> TwoPane:
                 return   # disabled: Everything already gives every stem
             state["residual"] = not state["residual"]
         elif isinstance(val, tuple) and val[0] == "stem":
-            if state["kit_source"] == "stem":
-                return   # instrument picks do not apply this run
             name = val[1]
             selected.discard(name) if name in selected else selected.add(name)
 
@@ -138,16 +137,29 @@ def _build_pane(state: dict) -> TwoPane:
     def right_rows(_left, _query=""):
         scope = "Everything" if state["keep_all"] else "My picks"
         split = "Off" if state["kit_split"] == "off" else state["kit_split"]
+        source = _SOURCE_LABEL[state["kit_source"]]
+        drums_on = "Drums" in selected
+        hdr = f"{Colors.MUTED}{Colors.BOLD}" if drums_on else _FADE   # header fades with the group
         rows = [
             (_opt_render("Format", FORMATS, state["output_format"]), SET_FORMAT, True),
             (_opt_render("Quality", ["Best", "Fast"], _QUALITY_LABEL[state["quality"]]), SET_QUALITY, True),
             (_opt_render("Scope", ["My picks", "Everything"], scope), SET_SCOPE, True),
+            (lambda f, c: "", SECTION, False),   # blank spacer, no dashes
+            (lambda f, c: f"  {hdr}Drum Options{Colors.RESET}", SECTION, False),
         ]
-        if "Drums" in selected:
+        if drums_on:
             rows += [
-                (lambda f, c: "", SECTION, False),   # blank spacer, no dashes
                 (_opt_render("Split", ["Off", "4", "5", "6"], split), SET_SPLIT, True),
-                (_opt_render("Source", ["Full song", "Drum stem"], _SOURCE_LABEL[state["kit_source"]]), SET_SOURCE, True),
+                (_opt_render("Input", ["Song", "Drum stem"], source), SET_SOURCE, True),
+                (lambda f, c: f"  {Colors.DIM}{_SOURCE_HINT[state['kit_source']]}{Colors.RESET}", SECTION, False),
+            ]
+        else:
+            # Shown but inert until Drums is a chosen stem (the engine ignores
+            # these unless Drums is selected, so a persisted value can't leak in).
+            rows += [
+                (_opt_render("Split", ["Off", "4", "5", "6"], split, disabled=True), SECTION, False),
+                (_opt_render("Input", ["Song", "Drum stem"], source, disabled=True), SECTION, False),
+                (lambda f, c: f"  {_FADE}Select Drums to enable{Colors.RESET}", SECTION, False),
             ]
         if dev_available:
             rows += [
@@ -206,19 +218,15 @@ def _build_pane(state: dict) -> TwoPane:
 
 # --- row renderers ---
 
-def _stem_render(opt, selected, models, quality, one_pass, drum_stem):
+def _stem_render(opt, selected, models, quality, one_pass):
     def render(focus, cursor):
         on = opt.name in selected
         mark = f"{Colors.SUCCESS}●{Colors.RESET}" if on else f"{Colors.MUTED}○{Colors.RESET}"
-        if drum_stem:
-            name_c = Colors.DIM
-            mark = f"{Colors.DIM}○{Colors.RESET}"
-        else:
-            name_c = Colors.SUCCESS if on else Colors.MUTED
+        name_c = Colors.SUCCESS if on else Colors.MUTED
         left = f"{mark} {name_c}{opt.name}{Colors.RESET}"
         # Model in its own right-aligned column (the dedicated "model" space).
         shown = short_name(one_pass) if one_pass else display_model(opt.name, models, quality)
-        model = "" if drum_stem else f"{Colors.MUTED}{shown}{Colors.RESET}"
+        model = f"{Colors.MUTED}{shown}{Colors.RESET}"
         # The widget reserves a 2-col cursor gutter, so our budget is _LEFT_W - 2.
         gap = _LEFT_W - 2 - visible_len(left) - visible_len(model) - 1
         return f"{left}{' ' * max(1, gap)}{model}"
@@ -236,10 +244,15 @@ def _residual_render(state):
     return render
 
 
-def _opt_render(label, options, current):
+def _opt_render(label, options, current, disabled=False):
     """A setting row: label, then every option inline with the active one lit
-    (accent + bold) and the rest muted. Enter/Space advances to the next."""
+    (accent + bold) and the rest muted. Enter/Space advances to the next.
+    `disabled` renders the whole row in a uniform faint fade (no active accent)
+    for a shown-but-inert setting."""
     def render(focus, cursor):
+        if disabled:                          # uniform faint fade, no active-option accent
+            segs = [f"{_FADE}{o}{Colors.RESET}" for o in options]
+            return f"{_FADE}{label:<8}{Colors.RESET}" + "  ".join(segs)
         segs = [(f"{Colors.PRIMARY}{Colors.BOLD}{o}{Colors.RESET}" if o == current
                  else f"{Colors.MUTED}{o}{Colors.RESET}") for o in options]
         return f"{Colors.DIM}{label:<8}{Colors.RESET}" + "  ".join(segs)
