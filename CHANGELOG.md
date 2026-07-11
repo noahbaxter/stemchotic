@@ -5,6 +5,13 @@ publishes the matching `## <version>` section as the GitHub release notes.
 Keep entries short and plain, and only list things a user actually sees or
 notices. No internals (build, CI, tests, refactors).
 
+## 0.9.7
+- Split levels now match the source, so the stems sum back to the original mix
+  instead of coming out quieter.
+- The residual now lines up correctly on sources that aren't already 44.1kHz.
+- The residual now supports the same input formats as the splits, instead of
+  failing on some files.
+
 ## 0.9.6
 - Clearer drum splitting: the stem list no longer greys out, and the drum-kit
   options (Split, and Song vs Drum stem input) are now grouped and only active

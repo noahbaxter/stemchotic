@@ -140,6 +140,7 @@ def _make_separator(output_dir=None, single_stem=None, output_format="WAV"):
         log_level=logging.ERROR,          # kill the INFO wall-of-text
         output_single_stem=single_stem,   # one file out when set
         output_format=output_format,
+        normalization_threshold=1.0,
         **kwargs,
     )
 
@@ -242,17 +243,32 @@ def _merge_pieces(paths: list[str], merge: dict, base: str, output_format: str) 
 
 
 def _residual(input_file, picked_paths, base, output_format):
-    """One file = the input mix minus the picked whole-stem outputs."""
-    import soundfile as sf, numpy as np
-    mix, sr = sf.read(input_file)
+    """One file = the input mix minus the picked whole-stem outputs.
+
+    The mix is decoded at the stems' sample rate (audio-separator writes stems at
+    44.1k), so a 48k source doesn't drift out of alignment. librosa+ffmpeg also
+    decode containers libsndfile can't open (webm/mkv/opus)."""
+    import warnings
+    import soundfile as sf, numpy as np, librosa
+
+    # The stems set the reference rate and channel layout; read the first to learn it.
+    stem0, sr = sf.read(picked_paths[0])
+    # ffmpeg decodes the mix (any container) resampled to the stems' rate. For
+    # containers libsndfile can't open, librosa noisily falls back to audioread;
+    # that path works, so mute its "PySoundFile failed" / deprecation warnings.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        mix = librosa.load(input_file, sr=sr, mono=False)[0]
+    mix = mix.T if mix.ndim == 2 else mix   # librosa gives (channels, n); want (n, channels)
+
     acc = np.zeros_like(mix)
-    for p in picked_paths:
-        a, _ = sf.read(p)
+    for i, p in enumerate(picked_paths):
+        a = stem0 if i == 0 else sf.read(p)[0]
         n = min(len(a), len(acc))
         if a.ndim == mix.ndim:
             acc[:n] += a[:n]
         else:                                  # mono stem into stereo mix or vice versa
-            acc[:n] += a[:n, None] if mix.ndim == 2 else a[:n].mean(axis=1)[:n]
+            acc[:n] += a[:n, None] if mix.ndim == 2 else a[:n].mean(axis=1)
     res = np.clip(mix - acc, -1.0, 1.0)
     ext = output_format.lower()
     out = os.path.join(os.path.dirname(os.path.abspath(input_file)), f"{base} [Residual].{ext}")
