@@ -214,6 +214,10 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_ENDPOINT_URL: https://ee4f7641599153d817b6bddbea5483e7.r2.cloudflarestorage.com
         run: |
+          if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
+            echo "::warning::R2 secrets not set — skipping CDN upload (add R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY)"
+            exit 0
+          fi
           VERSION="${GITHUB_REF_NAME#v}"
           upload() {  # <src> <key> <content-type> <download-filename>
             [ -f "$1" ] || { echo "::warning::missing $1 (skipped R2 upload)"; return 0; }
