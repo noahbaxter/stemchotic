@@ -204,3 +204,24 @@ jobs:
               gh release create "$TAG" --generate-notes "${ASSETS[@]}"
             fi
           fi
+
+      - name: Upload to R2 CDN
+        # Mirrors the stable "latest" keys the download worker points at
+        # (cdn.dichoticstudios.com/stemchotic/*). Skips any platform that
+        # didn't build so a partial release still publishes what it has.
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: https://ee4f7641599153d817b6bddbea5483e7.r2.cloudflarestorage.com
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          upload() {  # <src> <key> <content-type> <download-filename>
+            [ -f "$1" ] || { echo "::warning::missing $1 (skipped R2 upload)"; return 0; }
+            aws s3 cp "$1" "s3://dichotic-plugins/stemchotic/$2" \
+              --content-type "$3" \
+              --content-disposition "attachment; filename=$4" \
+              --endpoint-url "$AWS_ENDPOINT_URL" --region auto
+          }
+          upload artifacts/Stemchotic.dmg/Stemchotic.dmg Stemchotic-macOS.dmg   application/x-apple-diskimage "Stemchotic-${VERSION}-macOS.dmg"
+          upload artifacts/Stemchotic.exe/Stemchotic.exe Stemchotic-Windows.exe application/octet-stream       "Stemchotic-${VERSION}-Windows.exe"
+          upload artifacts/Stemchotic/Stemchotic         Stemchotic-Linux       application/octet-stream       "Stemchotic-${VERSION}-Linux"
