@@ -21,15 +21,6 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
 
-          # release.yml takes the version from the tag while dev-release.yml takes it
-          # from src/__init__.py; if they disagree the two channels disagree about
-          # what version they are.
-          DECLARED="$(grep -oE '__version__ = "[^"]+"' src/__init__.py | cut -d'"' -f2)"
-          if [ "$DECLARED" != "$VERSION" ]; then
-            echo "::error::tag is v${VERSION} but src/__init__.py says ${DECLARED}"
-            exit 1
-          fi
-
           # Without a matching section the publish step silently falls back to
           # --generate-notes, shipping a raw commit list as the release notes.
           if ! awk -v v="## ${VERSION}" '$0==v{found=1} END{exit !found}' CHANGELOG.md; then
@@ -37,7 +28,24 @@ jobs:
             exit 1
           fi
 
-          echo "v${VERSION}: version and changelog agree."
+          # The tag is the only place the version is declared, so it must be the newest
+          # section too. Otherwise tagging an old version ships stale notes as current.
+          NEWEST="$(grep -m1 -oE '^## [0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | cut -d' ' -f2)"
+          if [ "$NEWEST" != "$VERSION" ]; then
+            echo "::error::tag is v${VERSION} but the newest CHANGELOG section is ${NEWEST}"
+            exit 1
+          fi
+
+          # One launcher version, stated twice: launcher.py ships it, the app compares
+          # against it to nag for a re-download. Drifting apart means no nag.
+          LV="$(grep -oE '^LAUNCHER_VERSION = "[^"]+"' launcher.py | cut -d'"' -f2)"
+          LL="$(grep -oE '^LATEST_LAUNCHER = "[^"]+"' src/core/updates.py | cut -d'"' -f2)"
+          if [ "$LV" != "$LL" ]; then
+            echo "::error::LAUNCHER_VERSION is ${LV} but LATEST_LAUNCHER is ${LL}"
+            exit 1
+          fi
+
+          echo "v${VERSION}: changelog and launcher versions agree."
 
   app:
     needs: preflight
@@ -249,27 +257,3 @@ jobs:
             fi
           fi
 
-      - name: Upload to R2 CDN
-        # Mirrors the stable "latest" keys the download worker points at
-        # (cdn.dichoticstudios.com/stemchotic/*). Skips any platform that
-        # didn't build so a partial release still publishes what it has.
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_ENDPOINT_URL: https://ee4f7641599153d817b6bddbea5483e7.r2.cloudflarestorage.com
-        run: |
-          if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
-            echo "::warning::R2 secrets not set — skipping CDN upload (add R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY)"
-            exit 0
-          fi
-          VERSION="${GITHUB_REF_NAME#v}"
-          upload() {  # <src> <key> <content-type> <download-filename>
-            [ -f "$1" ] || { echo "::warning::missing $1 (skipped R2 upload)"; return 0; }
-            aws s3 cp "$1" "s3://dichotic-plugins/stemchotic/$2" \
-              --content-type "$3" \
-              --content-disposition "attachment; filename=$4" \
-              --endpoint-url "$AWS_ENDPOINT_URL" --region auto
-          }
-          upload artifacts/Stemchotic.dmg/Stemchotic.dmg Stemchotic-macOS.dmg   application/x-apple-diskimage "Stemchotic-${VERSION}-macOS.dmg"
-          upload artifacts/Stemchotic.exe/Stemchotic.exe Stemchotic-Windows.exe application/octet-stream       "Stemchotic-${VERSION}-Windows.exe"
-          upload artifacts/Stemchotic/Stemchotic         Stemchotic-Linux       application/octet-stream       "Stemchotic-${VERSION}-Linux"

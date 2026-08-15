@@ -14,3 +14,6 @@ models/
 # Local native build output
 /build/
 /dist/
+
+# Written by CI into app.zip; src/__init__.py reads it. Never committed.
+.version
