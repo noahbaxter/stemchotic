@@ -5,11 +5,25 @@
 # transitive dep to an exact version, and are what the launcher actually installs.
 # Nothing in the dependency tree moves until you run this.
 #
-# Run it when you change a .txt file, or deliberately to pick up upstream fixes.
+#   ./scripts/lock-deps.sh             apply .txt changes, keep existing pins
+#   ./scripts/lock-deps.sh --upgrade   also bump everything to the newest allowed
+#
+# The two modes matter. uv preserves whatever is already pinned in the .lock, so
+# the default is a no-op for untouched deps: safe to run any time, and CI can use
+# it to prove a .lock is in sync with its .txt. Only --upgrade actually moves
+# versions, which is the deliberate act the monthly refresh performs.
+#
 # Commit the result: the release zip is built from `git ls-files`, so an
 # uncommitted lock never reaches users.
 set -eo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+UPGRADE=""
+case "${1:-}" in
+    --upgrade) UPGRADE="--upgrade" ;;
+    "") ;;
+    *) echo "usage: $0 [--upgrade]" >&2; exit 1 ;;
+esac
 
 # Use the same uv the launcher installs with, so the resolution users get on their
 # machines matches the one locked here.
@@ -39,7 +53,7 @@ fi
 PYTHON_VERSION="$(grep -oE '^PYTHON_VERSION = "[^"]+"' "$ROOT/launcher.py" | cut -d'"' -f2)"
 for base in requirements requirements-gpu requirements-dml; do
     echo "Locking $base..."
-    ( cd "$ROOT" && "$UV" pip compile --universal \
+    ( cd "$ROOT" && "$UV" pip compile --universal $UPGRADE \
         --python-version "$PYTHON_VERSION" --emit-index-url \
         "$base.txt" -o "$base.lock" )
 done

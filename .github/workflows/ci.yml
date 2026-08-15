@@ -10,6 +10,34 @@ on:
   pull_request:
 
 jobs:
+  # The launcher installs from requirements*.lock, so editing requirements*.txt
+  # without regenerating does nothing at all: you would believe a pin landed while
+  # every user kept the old version. Recompiling without --upgrade keeps existing
+  # pins, so this only goes red when a .lock genuinely disagrees with its .txt,
+  # never because some dependency published a new release.
+  locks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Locks match their constraints
+        run: |
+          bash scripts/lock-deps.sh
+          if ! git diff --quiet -- requirements.lock requirements-gpu.lock requirements-dml.lock; then
+            echo "::error::requirements*.lock is stale. Run scripts/lock-deps.sh and commit the result."
+            git diff -- requirements.lock requirements-gpu.lock requirements-dml.lock
+            exit 1
+          fi
+          echo "Locks are in sync with their .txt constraints."
+
   sanity:
     runs-on: ubuntu-latest
     steps:

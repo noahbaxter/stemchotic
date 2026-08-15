@@ -1,0 +1,134 @@
+name: Lock refresh
+
+# Regenerate requirements*.lock monthly and open a PR if anything moved.
+#
+# The locks mean a third-party release can no longer reach users, but they also mean
+# nothing updates on its own. That matters most for onnx-weekly, a nightly channel
+# that appears to prune old builds: if a pinned nightly is deleted from PyPI, fresh
+# installs break with no fallback. So the update has to happen deliberately, and be
+# verified on every platform before it lands.
+#
+# The verify job runs here rather than on the PR because PRs opened with
+# GITHUB_TOKEN do not trigger workflows.
+
+on:
+  schedule:
+    - cron: '0 6 1 * *'   # 06:00 UTC, first of the month
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # --upgrade is the whole point: without it uv keeps the versions already
+      # pinned in the .lock and this job would never find anything to do.
+      - name: Recompile locks
+        run: bash scripts/lock-deps.sh --upgrade
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet -- requirements.lock requirements-gpu.lock requirements-dml.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Locks are unchanged, nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- requirements.lock requirements-gpu.lock requirements-dml.lock
+          fi
+
+      - name: Upload candidate locks
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-locks
+          path: |
+            requirements.lock
+            requirements-gpu.lock
+            requirements-dml.lock
+
+  verify:
+    needs: compile
+    if: needs.compile.outputs.changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Fetch candidate locks
+        uses: actions/download-artifact@v4
+        with:
+          name: candidate-locks
+
+      - name: Install from the candidate lock
+        shell: bash
+        run: pip install -r requirements.lock
+
+      - name: Import the audio engine
+        shell: bash
+        run: |
+          python -c "import launcher; print(launcher.SMOKE_IMPORTS)" > smoke.py
+          python smoke.py
+          echo "Audio engine imports cleanly on ${{ matrix.os }}."
+
+  pr:
+    needs: [compile, verify]
+    if: needs.compile.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch verified locks
+        uses: actions/download-artifact@v4
+        with:
+          name: candidate-locks
+
+      - name: Open PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MONTH="$(date -u +%Y-%m)"
+          BRANCH="lock-refresh/$MONTH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add requirements.lock requirements-gpu.lock requirements-dml.lock
+          git commit -m "refresh dependency locks for $MONTH"
+          git push -f origin "$BRANCH"
+          {
+            echo "Monthly \`scripts/lock-deps.sh --upgrade\` run."
+            echo
+            echo "Installed and imported the audio engine on Windows, Linux and macOS before opening this."
+            echo "Check the diff for major version jumps before merging."
+          } > pr-body.md
+          gh pr create --base main --head "$BRANCH" \
+            --title "refresh dependency locks for $MONTH" \
+            --body-file pr-body.md \
+            || echo "PR already open for $BRANCH; pushed to it instead."

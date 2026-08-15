@@ -1,0 +1,48 @@
+name: Lock verify
+
+# Install requirements.lock for real and import the audio engine, on every platform
+# we ship. Resolving is not the same as working: a lock can be perfectly satisfiable
+# and still be missing a module some dependency bare-imports without declaring it,
+# which is exactly how librosa 1.0 dropping audioread broke Windows users.
+#
+# Runs on PRs that touch the dependency files. The monthly refresh runs the same
+# check inline, because PRs opened with GITHUB_TOKEN do not trigger workflows.
+
+on:
+  pull_request:
+    paths:
+      - 'requirements*.txt'
+      - 'requirements*.lock'
+      - '.github/workflows/lock-verify.yml'
+  workflow_dispatch:
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install from the lock
+        shell: bash
+        run: pip install -r requirements.lock
+
+      # SMOKE_IMPORTS lives in launcher.py so this and the real install can't drift.
+      - name: Import the audio engine
+        shell: bash
+        run: |
+          python -c "import launcher; print(launcher.SMOKE_IMPORTS)" > smoke.py
+          python smoke.py
+          echo "Audio engine imports cleanly on ${{ matrix.os }}."

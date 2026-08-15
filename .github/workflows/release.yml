@@ -8,7 +8,39 @@ permissions:
   contents: write
 
 jobs:
+  # Cheap asserts that fail the release before anything is built or published.
+  # Each one guards a mistake that is only visible after the release is public.
+  preflight:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Tag, version and changelog agree
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          # release.yml takes the version from the tag while dev-release.yml takes it
+          # from src/__init__.py; if they disagree the two channels disagree about
+          # what version they are.
+          DECLARED="$(grep -oE '__version__ = "[^"]+"' src/__init__.py | cut -d'"' -f2)"
+          if [ "$DECLARED" != "$VERSION" ]; then
+            echo "::error::tag is v${VERSION} but src/__init__.py says ${DECLARED}"
+            exit 1
+          fi
+
+          # Without a matching section the publish step silently falls back to
+          # --generate-notes, shipping a raw commit list as the release notes.
+          if ! awk -v v="## ${VERSION}" '$0==v{found=1} END{exit !found}' CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## ${VERSION}' section"
+            exit 1
+          fi
+
+          echo "v${VERSION}: version and changelog agree."
+
   app:
+    needs: preflight
     runs-on: ubuntu-latest
 
     steps:
@@ -23,6 +55,17 @@ jobs:
           (cd libs/chotic-ui && git ls-files | sed 's|^|libs/chotic-ui/|') | zip -q app.zip -@
           echo "${GITHUB_REF_NAME#v}" > .version && zip -q app.zip .version
 
+      # The launcher installs from these; an app.zip without them sends every user
+      # down the loose-constraints fallback path, which is what the locks exist to
+      # prevent. `git ls-files` drives the zip, so this catches them being
+      # uncommitted or gitignored.
+      - name: Locks are actually in the zip
+        run: |
+          for f in requirements.lock requirements-gpu.lock requirements-dml.lock; do
+            unzip -l app.zip | grep -q " $f$" || { echo "::error::app.zip is missing $f"; exit 1; }
+          done
+          echo "All three locks present in app.zip."
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -30,6 +73,7 @@ jobs:
           path: app.zip
 
   launcher:
+    needs: preflight
     strategy:
       fail-fast: false
       matrix:
