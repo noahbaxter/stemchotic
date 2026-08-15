@@ -3,6 +3,20 @@
 # audio-separator[gpu].
 audio-separator[cpu]==0.44.2
 
+# audio-separator's spec_utils does a bare `import audioread` without declaring
+# it; it only ever got the module as a librosa dependency. librosa 1.0
+# (2026-08-11) dropped audioread and fresh installs started dying with
+# ModuleNotFoundError mid-separation. Two belts: declare audioread ourselves so
+# it survives any future librosa change, and cap librosa at the major version
+# audio-separator is actually written against.
+audioread>=3
+librosa<1.0
+
+# Same story: roformer/attend.py does `from packaging import version` without
+# declaring it, and only gets it via onnxruntime/librosa. That path loads lazily
+# when a roformer model runs, so losing it would fail mid-separation.
+packaging
+
 # Bundled ffmpeg/ffprobe. audio-separator (and pydub) shell out to bare `ffmpeg`
 # on PATH; a packaged app's PATH does not include the user's ffmpeg, and end
 # users may not have one. static-ffmpeg ships both binaries cross-platform.

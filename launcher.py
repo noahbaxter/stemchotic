@@ -739,7 +739,29 @@ def hardware_choice() -> str:
     return state["hardware"]
 
 
-REQUIREMENTS_FOR = {"cpu": "requirements.txt", "gpu": "requirements-gpu.txt", "dml": "requirements-dml.txt"}
+# Installs resolve from the .lock files, not the .txt ones. The .txt files are the
+# hand-written constraints; the locks are `uv pip compile --universal` output pinning
+# every transitive dep to an exact version. Without them a fresh install pulls whatever
+# our dependencies' dependencies released that day, which is how librosa 1.0 dropping
+# audioread broke every install on 2026-08-11. Regenerate with scripts/lock-deps.sh.
+REQUIREMENTS_FOR = {"cpu": "requirements.lock", "gpu": "requirements-gpu.lock", "dml": "requirements-dml.lock"}
+
+
+def requirements_path(hardware: str) -> Path:
+    """Lock file for a hardware tier, falling back to the loose .txt constraints.
+
+    A new launcher can meet an app dir that predates the locks (--offline against a
+    stale cache, or a hand-placed app.zip), and a missing lock would otherwise be a
+    hard crash. The .txt files resolve live, which is exactly what the locks exist to
+    avoid, so this is a last resort rather than a supported mode.
+    """
+    lock = get_app_dir() / REQUIREMENTS_FOR[hardware]
+    if lock.exists():
+        return lock
+    loose = lock.with_suffix(".txt")
+    log(f"{lock.name} missing, falling back to {loose.name}")
+    print(f"  Note: {lock.name} not found, resolving from {loose.name}.")
+    return loose
 
 
 # --- Environment provisioning ---
@@ -781,7 +803,7 @@ def ensure_env(hardware: str | None = None):
     `hardware` forces a tier (used by the CPU fallback so a failing GPU
     install can't re-detect gpu and recurse under --setup)."""
     hardware = hardware or hardware_choice()
-    req = get_app_dir() / REQUIREMENTS_FOR[hardware]
+    req = requirements_path(hardware)
     fp_file = get_env_dir() / ".fingerprint"
     fp = _fingerprint(req, hardware)
     if fp_file.exists() and fp_file.read_text().strip() == fp and env_python().exists():
@@ -832,7 +854,18 @@ def ensure_env(hardware: str | None = None):
     # whose CUDA version doesn't match torch's). Verify the audio engine actually
     # loads; if a non-CPU tier can't, rebuild on CPU instead of shipping a broken
     # env that errors only when the user runs a separation.
-    smoke = subprocess.run([str(env_python()), "-c", "import audio_separator.separator"],
+    #
+    # Import every per-architecture module, not just the package root. audio-separator
+    # bare-imports modules it never declares (audioread, packaging), so a transitive
+    # dep dropping one breaks us; the architecture and roformer modules load lazily
+    # per model, so a root-only check would miss it until mid-separation.
+    SMOKE_IMPORTS = (
+        "import audio_separator.separator; "
+        "from audio_separator.separator.architectures import "
+        "demucs_separator, mdx_separator, mdxc_separator, vr_separator; "
+        "import audio_separator.separator.uvr_lib_v5.roformer.attend"
+    )
+    smoke = subprocess.run([str(env_python()), "-c", SMOKE_IMPORTS],
                            cwd=get_app_dir(), env=env)
     if smoke.returncode != 0:
         if hardware != "cpu":

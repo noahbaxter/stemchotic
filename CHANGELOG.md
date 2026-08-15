@@ -5,6 +5,11 @@ publishes the matching `## <version>` section as the GitHub release notes.
 Keep entries short and plain, and only list things a user actually sees or
 notices. No internals (build, CI, tests, refactors).
 
+## 0.9.8
+- Dependency versions are now pinned, so an unrelated package update can't break
+  setup. This is what caused those "No module named 'audioread'" errors, after
+  librosa dropped the dependency. If you hit it, just relaunch and it should self repair.
+
 ## 0.9.7
 - Split levels now match the source, so the stems sum back to the original mix
   instead of coming out quieter.

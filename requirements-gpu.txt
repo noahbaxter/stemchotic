@@ -10,6 +10,9 @@
 # cards work; it still ships sm_50-sm_90, so older GPUs keep working too.
 --extra-index-url https://download.pytorch.org/whl/cu128
 audio-separator[gpu]==0.44.2
+audioread>=3      # undeclared audio-separator import (see requirements.txt)
+librosa<1.0       # audio-separator is not 1.x-ready (see requirements.txt)
+packaging         # undeclared audio-separator import (see requirements.txt)
 # Pin onnxruntime-gpu to a CUDA 12 build to match torch's cu128 wheels. Left
 # unpinned, audio-separator[gpu] pulls the latest (1.27+), which is built for
 # CUDA 13 and dies at runtime with "libcudart.so.13: cannot open shared object

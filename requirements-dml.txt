@@ -1,5 +1,8 @@
 # DirectML variant (AMD/Intel GPUs on Windows), chosen in the launcher
 # questionnaire. The [dml] extra pulls onnxruntime-directml + torch_directml.
 audio-separator[dml]==0.44.2
+audioread>=3      # undeclared audio-separator import (see requirements.txt)
+librosa<1.0       # audio-separator is not 1.x-ready (see requirements.txt)
+packaging         # undeclared audio-separator import (see requirements.txt)
 static-ffmpeg==3.0  # bundled ffmpeg/ffprobe on PATH (see requirements.txt)
 -e ./libs/chotic-ui
