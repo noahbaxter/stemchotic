@@ -1,6 +1,6 @@
 # Stemchotic
 
-A dead-simple stem separator. Pick what you want out of a track ("vocals", "instrumental", "drums", "drumset pieces", "bass", "guitar", "piano", "other") and Stemchotic picks the right model for you and runs it. No 40-item dropdown of cryptic model names.
+A dead-simple stem separator that gives you access to the best open models with no setup required. Just choose your stems and Stemchotic decides the best model and runs it.
 
 It's a thin, opinionated TUI on top of
 [python-audio-separator](https://github.com/karaokenerds/python-audio-separator),
@@ -10,53 +10,63 @@ Demucs, and the BS-RoFormer family.
 
 ![Stemchotic](docs/screenshot.png)
 
-#### [Download](https://github.com/noahbaxter/stemchotic/releases/latest) now for macOS, Windows, and Linux.
+### Download
+
+[![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/noahbaxter/stemchotic/releases/latest/download/Stemchotic.dmg)
+[![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/noahbaxter/stemchotic/releases/latest/download/Stemchotic.exe)
+[![Linux](https://img.shields.io/badge/Linux-x86__64-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/noahbaxter/stemchotic/releases/latest/download/Stemchotic)
+
+Also on [dichoticstudios.com](https://dichoticstudios.com/plugins/stemchotic).
 
 ## Status
 
-Stemchotic is currently in Beta on macOS, Windows, and Linux with all primary features functional.
+Stemchotic is currently in Beta on macOS, Windows, and Linux.
 
-- Pick the parts you want (up to 7: vocals, instrumental, drums, bass, guitar, piano, other). Stemchotic picks a strong default model for each, but you're welcome to pick your own whenever you like.
-- Drum-kit splitting into kick / snare / toms / cymbals (4/5/6-piece).
-- Routes to strong open models (BS-RoFormer, DrumSep, Demucs) and sets up GPU-acceleration if your hardware would benefit from it.
-- Interactive TUI or one-line CLI; WAV / FLAC / MP3, output saved next to your file.
+- Pick the instruments you want and that's what you get. Each uses my preferred splitting model either for quality or speed, but you're able to easily set alternate model at any time.
+- Drum-kit splitting into kick / snare / toms / cymbals (choice of 4/5/6-pieces).
+- Routes to the best open models (BS-RoFormer, DrumSep, Demucs) and handles all downloads.
+- Automatically sets up GPU acceleration if you have the hardware for it.
+- Useable as an interactive TUI for normies or one-line CLI for scripting.
 
 ## Install
 
-Go to the [latest release](https://github.com/noahbaxter/stemchotic/releases/latest),
-open the **Assets** list, and download the file for your computer:
+Use the download button for your platform above, then:
 
 **macOS** (Apple Silicon)
-1. Download `Stemchotic.dmg`.
-2. Double-click it. In the window that opens, drag the **Stemchotic** icon onto the **Applications** folder.
-3. Open **Stemchotic** from Applications (or Launchpad).
+1. Open `Stemchotic.dmg`. In the window that opens, drag the **Stemchotic** icon onto the **Applications** folder.
+2. Open **Stemchotic** like any other macOS app.
 
 **Windows 10/11**
-1. Download `Stemchotic.exe`.
-2. Double-click it. Windows will say "Windows protected your PC", that's normal for a new app: click **More info**, then **Run anyway**.
+1. Double-click `Stemchotic.exe`. Windows will say "Windows protected your PC", so click **More info** then **Run anyway**.
 
 **Linux**
-1. Download `Stemchotic`, mark it executable, and run it from a terminal.
+1. Mark `Stemchotic` executable and run it from a terminal.
 
-The first launch sets everything up for you (it downloads Python and the audio
-engine, about 1-2.5 GB depending on your hardware), so give it a few minutes. After that it should open in seconds. Separation models automatically download the first time you use each one (roughly 50-670 MB apiece) and are cached afterward. The model list comes from python-audio-separator, with a `models.json` overlay in this repo adding curated quality rankings and a few open-weight extras (DrumSep, BS-Roformer-SW); each model is pulled from its public host (the UVR repo, or the authors' repos) on first use.
+The first launch downloads a Python virtual environment and the audio engine, 1-2.5 GB depending on your hardware, so give it a few minutes. After that it'll open in seconds.
+
+Separation models download the first time you use each one (50-670 MB apiece) and
+are cached for repeat use. The list is sourced from python-audio-separator; the `models.json` in
+this repo adds quality rankings and a few open-weight extras (DrumSep,
+BS-Roformer-SW). Each model is pulled from its public host on first use.
 
 ## Using it
 
 1. Open Stemchotic (double-click it).
-2. Scroll the part list and press **Space** to pick each stem you want.
-3. Press **S** to start.
+2. Scroll the part list and press **Space** to select each stem you want.
+3. Press **S** to start splitting.
 4. Type the path to your audio file, or just drag the file onto the window.
 5. Stemchotic separates the stems, names them clearly, and drops them in the same folder as the original.
 
-That's the whole loop. If you want more control: the window has two panes, **Tab**
+That's the whole loop. If you want more control the window has two panes, **Tab**
 switches between **Stem Selection** (left) and **Settings** (right). Each highlighted
-stem shows the model it'll use, and the line under the box is the live plan. **M**
-opens the Models screen, **S** opens the drum-kit split. Settings cover **Quality**
-(Best / Fast), **Scope** (just your picks vs everything the models make), **Drum kit**
-(4/5/6-piece, from a song or an existing drum stem), and output format.
+stem shows the model it'll use, and the line under the box is the plan. **M** opens the Model 
+picker screen. Settings cover **Quality** (Best / Fast), **Scope** (only your stems or 
+everything the models make), **Drum kit** (4/5/6-piece, from a song or an existing drum stem), 
+and output format.
 
 ### Maintenance flags
+
+If you have any issues, these maintenance flags can be run in a command line.
 
 | Flag | What it does |
 |---|---|
@@ -65,7 +75,10 @@ opens the Models screen, **S** opens the drum-kit split. Settings cover **Qualit
 | `--offline` | Skips the update check and launches from the local install |
 | `--uninstall` | Removes everything it installed (cache, state, logs, menu entry); leaves the launcher |
 
-## Command line
+## For devs
+
+<details>
+<summary><b>Command line</b> (presets, flags, scripting)</summary>
 
 For scripting and power users (run from a source checkout; the installed launcher
 binary accepts the same arguments). Pass a preset and/or an audio file, plus flags:
@@ -103,7 +116,10 @@ python stemchotic.py --list              # list presets
 | `--source song\|stem` | Treat the input as a full song or an existing drum stem |
 | `-y`, `--yes` | Skip per-model download prompts |
 
-## From source
+</details>
+
+<details>
+<summary><b>From source</b></summary>
 
 The TUI toolkit lives in the [chotic-ui](https://github.com/noahbaxter/chotic-ui)
 submodule, so clone with submodules (or init them after):
@@ -118,6 +134,8 @@ pip install -r requirements.txt    # installs audio-separator + the chotic-ui su
 
 On Apple Silicon this pulls `audio-separator[cpu]` (CoreML acceleration). For an
 NVIDIA GPU, change the extra to `[gpu]` in `requirements.txt`.
+
+</details>
 
 ## Credits
 
