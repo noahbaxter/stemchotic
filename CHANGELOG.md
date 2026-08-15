@@ -5,6 +5,11 @@ publishes the matching `## <version>` section as the GitHub release notes.
 Keep entries short and plain, and only list things a user actually sees or
 notices. No internals (build, CI, tests, refactors).
 
+## 0.9.9
+- GPU access is checked on every launch now, preventing a miscache where the first
+  run didn't see one and forced you onto CPU by mistake.
+- This fix requires a redownload of the launcher.
+
 ## 0.9.8
 - Dependency versions are now pinned, so an unrelated package update can't break
   setup. This is what caused those "No module named 'audioread'" errors, after
