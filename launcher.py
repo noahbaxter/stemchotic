@@ -717,26 +717,71 @@ def detect_nvidia() -> bool:
         return False
 
 
-def hardware_choice() -> str:
-    """'gpu' | 'dml' | 'cpu'. Persisted; --setup re-asks."""
+def _record_tier_failure(hardware: str, fp: str):
+    """Remember that a tier failed against this exact lock, so the next launch stays
+    on CPU instead of re-downloading a multi-GB env that we know does not work."""
     state = read_state()
-    if "--setup" not in sys.argv and state.get("hardware") in ("gpu", "dml", "cpu"):
-        return state["hardware"]
-    if sys.platform == "darwin":
-        choice = "cpu"                      # CoreML/MPS comes with the cpu extra
-    elif detect_nvidia():
-        print("  NVIDIA GPU detected: using GPU acceleration.")
-        choice = "gpu"
-    elif sys.platform == "win32" and _has_terminal():
-        print("\n  No NVIDIA GPU detected.")
-        print("  [A] I have an AMD or Intel GPU (use DirectML acceleration)")
-        print("  [C] CPU only (safe default)")
-        choice = "dml" if choice_key("  Choice [A/C]: ", "ac", default="c") == "a" else "cpu"
-    else:
-        choice = "cpu"
-    state["hardware"] = choice
+    state.setdefault("hardware_failed", {})[hardware] = fp
+    state["hardware"] = "cpu"
     write_state(state)
-    return state["hardware"]
+
+
+def _tier_fingerprint(hardware: str) -> str:
+    """Fingerprint of the lock a tier would install from ('' if unreadable)."""
+    try:
+        return _fingerprint(requirements_path(hardware), hardware)
+    except OSError:
+        return ""
+
+
+def hardware_choice() -> str:
+    """'gpu' | 'dml' | 'cpu'. Re-detected every launch.
+
+    Only two things persist, and neither is the tier itself: the answer to the
+    Windows AMD/Intel question (so it isn't asked twice) and a record of which tier
+    failed against which lock. Storing failures rather than choices is what lets
+    someone demoted to CPU by a broken dependency get their GPU back on their own
+    once the lock changes, instead of being stuck until they discover --setup.
+    """
+    state = read_state()
+    if "--setup" in sys.argv:
+        state.pop("hardware_answer", None)
+        state.pop("hardware_failed", None)
+
+    if sys.platform == "darwin":
+        preferred = "cpu"                   # CoreML/MPS comes with the cpu extra
+    elif detect_nvidia():
+        preferred = "gpu"
+    elif sys.platform == "win32":
+        preferred = state.get("hardware_answer")
+        if preferred not in ("dml", "cpu"):
+            if _has_terminal():
+                print("\n  No NVIDIA GPU detected.")
+                print("  [A] I have an AMD or Intel GPU (use DirectML acceleration)")
+                print("  [C] CPU only (safe default)")
+                preferred = "dml" if choice_key("  Choice [A/C]: ", "ac", default="c") == "a" else "cpu"
+                state["hardware_answer"] = preferred   # only remember a real answer
+            else:
+                preferred = "cpu"           # nobody to ask; ask again when there is
+    else:
+        preferred = "cpu"
+
+    # Never reinstall a tier already known to fail against this exact lock: detection
+    # runs every launch, so without this a broken GPU env would wipe and re-download
+    # itself on every start. A changed lock means whatever broke it has moved, which
+    # is worth one more try.
+    choice = preferred
+    failed = state.get("hardware_failed") or {}
+    if preferred != "cpu" and failed.get(preferred) == _tier_fingerprint(preferred):
+        print(f"  {preferred.upper()} setup failed last time; using CPU.")
+        log(f"{preferred} previously failed against the current lock, staying on cpu")
+        choice = "cpu"
+    elif preferred == "gpu":
+        print("  NVIDIA GPU detected: using GPU acceleration.")
+
+    state["hardware"] = choice               # recorded for support, never read back
+    write_state(state)
+    return choice
 
 
 # Installs resolve from the .lock files, not the .txt ones. The .txt files are the
@@ -745,6 +790,19 @@ def hardware_choice() -> str:
 # our dependencies' dependencies released that day, which is how librosa 1.0 dropping
 # audioread broke every install on 2026-08-11. Regenerate with scripts/lock-deps.sh.
 REQUIREMENTS_FOR = {"cpu": "requirements.lock", "gpu": "requirements-gpu.lock", "dml": "requirements-dml.lock"}
+
+
+# Import every per-architecture module, not just the package root. audio-separator
+# bare-imports modules it never declares (audioread, packaging), so a transitive dep
+# dropping one breaks us; the architecture and roformer modules load lazily per model,
+# so a root-only check would miss it until mid-separation. The lock-refresh workflow
+# runs this same string against a candidate lock, so keep it importable standalone.
+SMOKE_IMPORTS = (
+    "import audio_separator.separator; "
+    "from audio_separator.separator.architectures import "
+    "demucs_separator, mdx_separator, mdxc_separator, vr_separator; "
+    "import audio_separator.separator.uvr_lib_v5.roformer.attend"
+)
 
 
 def requirements_path(hardware: str) -> Path:
@@ -844,9 +902,9 @@ def ensure_env(hardware: str | None = None):
                         "-r", str(req)], cwd=get_app_dir(), env=env)
     if r.returncode != 0:
         if hardware != "cpu":
-            print("\n  GPU install failed. Falling back to CPU (re-run with --setup to retry GPU).")
+            print("\n  GPU install failed. Falling back to CPU (retried automatically once deps change).")
             log("GPU install failed, falling back to cpu")
-            state = read_state(); state["hardware"] = "cpu"; write_state(state)
+            _record_tier_failure(hardware, fp)
             ensure_env(hardware="cpu")
             return
         error_exit("Dependency install failed. See uv output above.")
@@ -854,24 +912,13 @@ def ensure_env(hardware: str | None = None):
     # whose CUDA version doesn't match torch's). Verify the audio engine actually
     # loads; if a non-CPU tier can't, rebuild on CPU instead of shipping a broken
     # env that errors only when the user runs a separation.
-    #
-    # Import every per-architecture module, not just the package root. audio-separator
-    # bare-imports modules it never declares (audioread, packaging), so a transitive
-    # dep dropping one breaks us; the architecture and roformer modules load lazily
-    # per model, so a root-only check would miss it until mid-separation.
-    SMOKE_IMPORTS = (
-        "import audio_separator.separator; "
-        "from audio_separator.separator.architectures import "
-        "demucs_separator, mdx_separator, mdxc_separator, vr_separator; "
-        "import audio_separator.separator.uvr_lib_v5.roformer.attend"
-    )
     smoke = subprocess.run([str(env_python()), "-c", SMOKE_IMPORTS],
                            cwd=get_app_dir(), env=env)
     if smoke.returncode != 0:
         if hardware != "cpu":
-            print("\n  GPU audio engine failed to load. Falling back to CPU (re-run with --setup to retry GPU).")
+            print("\n  GPU audio engine failed to load. Falling back to CPU (retried automatically once deps change).")
             log("audio_separator import failed, falling back to cpu")
-            state = read_state(); state["hardware"] = "cpu"; write_state(state)
+            _record_tier_failure(hardware, fp)
             shutil.rmtree(get_env_dir(), ignore_errors=True)
             ensure_env(hardware="cpu")
             return
