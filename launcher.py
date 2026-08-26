@@ -26,7 +26,7 @@ from urllib.request import Request, urlopen
 # The launcher's own version, independent of the app (app.zip) version. The
 # launcher is a frozen bootstrapper users download once; only bump this when
 # launcher.py itself changes, not on every app release.
-LAUNCHER_VERSION = "1.2"
+LAUNCHER_VERSION = "1.3"
 RELEASE_TAG = ""  # Injected to "dev-latest" for dev launcher builds
 PYTHON_VERSION = "3.12"
 UV_VERSION = "0.7.13"
@@ -124,6 +124,18 @@ def build_host_command(wezterm: str, lua: str, cwd: str, launcher_path: str, for
         "start", "--always-new-process", "--cwd", cwd,
         "--", launcher_path, *forward_args, "--hosted",
     ]
+
+
+def host_environment() -> dict:
+    """The environment to hand the WezTerm host.
+
+    PyInstaller's onefile bootloader marks its own process tree with _PYI_*
+    variables. Those survive the exec into WezTerm and reach the launcher copy
+    WezTerm spawns, which then sees _PYI_PARENT_PROCESS_LEVEL, decides it is an
+    unpacking child, checks that its parent runs the same executable, finds
+    wezterm-gui instead, and exits before it can log anything. Stripping them
+    lets the hosted copy start as a fresh top-level process."""
+    return {k: v for k, v in os.environ.items() if not k.startswith("_PYI_")}
 
 
 def host_paths() -> tuple[Path, Path]:
@@ -253,11 +265,12 @@ def maybe_relaunch_in_host():
         str(wezterm), str(lua), str(get_launcher_dir()),
         str(get_launcher_path()), sys.argv[1:],
     )
+    env = host_environment()
     if sys.platform == "win32":
         DETACHED_PROCESS = 0x00000008
-        subprocess.Popen(cmd, creationflags=DETACHED_PROCESS, close_fds=True)
+        subprocess.Popen(cmd, creationflags=DETACHED_PROCESS, close_fds=True, env=env)
         sys.exit(0)
-    os.execv(str(wezterm), cmd)  # replaces this process; does not return
+    os.execve(str(wezterm), cmd, env)  # replaces this process; does not return
 
 
 def ensure_linux_desktop():
