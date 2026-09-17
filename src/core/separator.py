@@ -11,9 +11,11 @@ import logging
 import os
 import re
 import shutil
+import subprocess
 import threading
 from pathlib import Path
 
+from . import applog
 from .engines import Pass, resolve, short_name, category_model, DEFAULT_QUALITY
 from .progress import capture_tqdm
 from .registry import CUSTOM_MODELS, download_custom, ensure_registry
@@ -86,30 +88,95 @@ def models_dir() -> str:
 
 
 _FFMPEG_LOCK = threading.Lock()
-_ffmpeg_ready = False
+_ffmpeg_last = None   # last logged ffmpeg resolution, to keep the log quiet
 
 
-def ensure_ffmpeg() -> None:
-    """Put ffmpeg + ffprobe on PATH for audio-separator and pydub.
+_PROBE_FRAMES = 256   # 256 stereo s16 frames -> 1024 bytes of PCM back out
 
-    A packaged app's PATH does not include the user's ffmpeg, and a fresh
-    machine may have none, so we ship our own via the static-ffmpeg package and
-    prepend it here. A real system ffmpeg already on PATH (dev machines, CLI
-    users) is used as-is; we only fall back to the bundled binaries otherwise.
-    Idempotent and thread-safe (the TUI warms this from a background thread)."""
-    global _ffmpeg_ready
-    if _ffmpeg_ready:
-        return
+
+def _probe_wav() -> bytes:
+    """A ~1KB silent stereo WAV, fed to ffmpeg/ffprobe on stdin as a smoke test."""
+    import io, wave
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(44100)
+        w.writeframes(b"\0" * 4 * _PROBE_FRAMES)
+    return buf.getvalue()
+
+
+def _run(cmd: list[str], data: bytes) -> subprocess.CompletedProcess | None:
+    """Run `cmd` with `data` on stdin. None if it couldn't run at all."""
+    try:
+        return subprocess.run(cmd, input=data, capture_output=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _works() -> bool:
+    """Whether the ffmpeg + ffprobe on PATH can actually decode audio.
+
+    Being on PATH is not enough, and neither is printing a version banner. A
+    Microsoft Store app-execution-alias stub or a dead scoop/choco shim
+    resolves, exits 0 and prints nothing, which is what makes audio-separator
+    read splitlines()[0] of empty output and die with a bare "list index out of
+    range" before any audio is touched. A build that is merely broken or too
+    stripped down gets past a version check but fails mid-render instead, so we
+    make both tools do the real job once, on a WAV small enough to be free."""
+    wav = _probe_wav()
+    dec = _run(["ffmpeg", "-v", "error", "-i", "pipe:0", "-f", "s16le", "pipe:1"], wav)
+    if dec is None or dec.returncode != 0 or len(dec.stdout) < 4 * _PROBE_FRAMES:
+        return False
+    meta = _run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_name",
+                 "-of", "csv=p=0", "pipe:0"], wav)
+    return meta is not None and meta.returncode == 0 and bool(meta.stdout.strip())
+
+
+def _note(msg: str) -> None:
+    """Log an ffmpeg resolution, but only when it changes, so re-probing every
+    run doesn't fill the log with the same line."""
+    global _ffmpeg_last
+    if msg != _ffmpeg_last:
+        _ffmpeg_last = msg
+        applog.write(f"ffmpeg: {msg}")
+
+
+def ensure_ffmpeg() -> bool:
+    """Put OUR ffmpeg + ffprobe on PATH for audio-separator and pydub. Returns
+    whether a working pair ended up there.
+
+    We always prefer the static-ffmpeg copy, even when the machine already has
+    one. Whatever a user has on PATH is unknowable: a Microsoft Store
+    app-execution-alias, a dead scoop shim, something ancient, something built
+    without the muxers we need. Owning the binary is the only way that class of
+    break stays fixed, and it costs a one-time ~70-140MB against a first run
+    that already pulls torch and the models. The machine's own ffmpeg is the
+    last resort, used only when we could not get ours (offline first run).
+
+    Deliberately NOT latched. The probe costs ~40ms against a render measured in
+    minutes, so we re-check before every separator instead of caching a verdict
+    that can go stale: a download that failed offline retries on the next run,
+    and a copy that breaks or is deleted mid-session is replaced without a
+    restart. Thread-safe (the lock also keeps two threads from racing the same
+    static-ffmpeg download)."""
     with _FFMPEG_LOCK:
-        if _ffmpeg_ready:
-            return
-        if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
-            try:
-                import static_ffmpeg
-                static_ffmpeg.add_paths()   # prepend cached ffmpeg/ffprobe to PATH
-            except Exception:
-                pass   # leave PATH as-is; Separator reports if ffmpeg is truly missing
-        _ffmpeg_ready = True
+        try:
+            import static_ffmpeg
+            static_ffmpeg.add_paths()   # prepend our ffmpeg/ffprobe to PATH
+        except Exception as e:
+            # Couldn't fetch ours. Anything already on PATH is better than
+            # nothing, provided it can actually decode.
+            if _works():
+                _note(f"ours unavailable ({e!r}), using system {shutil.which('ffmpeg')}")
+                return True
+            _note(f"ours unavailable ({e!r}) and no working system ffmpeg")
+            return False   # Separator reports it; next run retries from scratch
+        if _works():
+            _note(f"using {shutil.which('ffmpeg')}")
+            return True
+        _note(f"our own copy at {shutil.which('ffmpeg')} can't decode")
+        return False
 
 
 def _make_separator(output_dir=None, single_stem=None, output_format="WAV"):
@@ -122,7 +189,14 @@ def _make_separator(output_dir=None, single_stem=None, output_format="WAV"):
         raise RuntimeError(
             "audio-separator is not installed. Run: pip install -r requirements.txt"
         ) from e
-    ensure_ffmpeg()
+    if not ensure_ffmpeg():
+        # Say so plainly. Left to audio-separator, a broken-but-present ffmpeg
+        # surfaces as a bare "list index out of range" from its version check.
+        raise RuntimeError(
+            "No working ffmpeg. Stemchotic couldn't set up its own copy and "
+            "nothing usable was on PATH (see the log). Check your connection "
+            "and relaunch."
+        )
     kwargs = {}
     md = model_dir()
     if md:
