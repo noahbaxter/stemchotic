@@ -12,7 +12,7 @@ import os
 
 # Bump in lockstep with launcher.py's LAUNCHER_VERSION whenever the launcher
 # (or its bundled WezTerm / wezterm.lua) changes and users should re-download.
-LATEST_LAUNCHER = "1.2"
+LATEST_LAUNCHER = "1.3"
 RELEASES_URL = "https://github.com/noahbaxter/stemchotic/releases/latest"
 
 
