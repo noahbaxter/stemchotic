@@ -5,6 +5,12 @@ publishes the matching `## <version>` section as the GitHub release notes.
 Keep entries short and plain, and only list things a user actually sees or
 notices. No internals (build, CI, tests, refactors).
 
+## 0.9.11
+- Files with non English characters should now properly work on Windows instead of failing with "File not found".
+- Choosing CPU mode on Windows no longer prevents Stemchotic from opening.
+- File path prompt now allows proper arrow keys traversal and ctrl+v pastes.
+- Clicking in the window on Windows no longer freezes the app.
+
 ## 0.9.10
 - Fixed "list index out of range" which occurs when a locally installed ffmpeg
   is broken or misconfigured. Stemchotic now just always uses its own copy.
