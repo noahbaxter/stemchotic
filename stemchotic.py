@@ -182,8 +182,8 @@ def main(argv=None):
         list_presets()
         return 0
 
-    # Honor a saved CPU/GPU choice before anything imports torch. Re-execs once
-    # (instantly, same env) only when CPU fallback is active; no-op otherwise.
+    # Honor a saved CPU/GPU choice before anything imports torch (sets
+    # CUDA_VISIBLE_DEVICES in-process; no-op on non-GPU installs).
     device.apply_pref_at_startup()
 
     # Disambiguate the positionals. With one positional that isn't a known preset,

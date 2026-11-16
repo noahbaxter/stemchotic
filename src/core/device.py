@@ -3,40 +3,33 @@
 The GPU env (cu128 torch + onnxruntime-gpu) runs both modes; audio-separator
 picks GPU whenever torch.cuda.is_available(), so the only lever is the
 CUDA_VISIBLE_DEVICES env var ("" hides the GPU, leaving CPU). torch reads it at
-first CUDA init, so flipping device means re-exec'ing the process - but the env
-is already built, so that re-exec is instant (no reinstall, no second venv).
+first CUDA init, so at startup (before torch is imported) setting it in-process
+is enough. Flipping device mid-session means restarting the process, but the
+env is already built, so that restart is instant (no reinstall, no second venv).
 
 This lives entirely in the app bundle: the frozen launcher is never touched, so
 the toggle works for every user regardless of their launcher version.
 """
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 from . import appstate
 
 VISIBLE = "CUDA_VISIBLE_DEVICES"
-SENTINEL = "STEMCHOTIC_DEVICE_APPLIED"   # guards against a startup re-exec loop
 
 
-# --- pure helpers (unit-tested without torch/GPU) ---
+# --- pure helper (unit-tested without torch/GPU) ---
 
-def target_visible(pref: str):
-    """The CUDA_VISIBLE_DEVICES value a preference wants. "" masks the GPU for
-    CPU mode; None means leave it untouched (GPU mode)."""
-    return "" if pref == "cpu" else None
-
-
-def needs_reexec(pref: str, current_visible, already_applied: bool) -> bool:
-    """Whether startup must re-exec to honor `pref`. `current_visible` is the
-    raw CUDA_VISIBLE_DEVICES (None if unset). Always False once the sentinel is
-    set, so the re-exec'd child never bounces again."""
-    if already_applied:
-        return False
+def apply_to_env(pref: str, env) -> None:
+    """Set CUDA masking in `env` for `pref`. CPU masks the GPU with ""; GPU only
+    acts to undo a "" mask, leaving any other value (e.g. "0") alone."""
     if pref == "cpu":
-        return current_visible != ""        # mask it unless already masked
-    return current_visible == ""            # gpu: only act to unmask
+        env[VISIBLE] = ""
+    elif env.get(VISIBLE) == "":
+        del env[VISIBLE]
 
 
 # --- pref persistence ---
@@ -55,32 +48,30 @@ def gpu_toggle_available(path: Path | None = None) -> bool:
     return appstate.read(path).get("hardware") == "gpu"
 
 
-# --- the impure edges: re-exec into the same python with device masking set ---
-
-def _reexec(pref: str) -> None:
-    env = os.environ.copy()
-    tv = target_visible(pref)
-    if tv is None:
-        env.pop(VISIBLE, None)
-    else:
-        env[VISIBLE] = tv
-    env[SENTINEL] = "1"
-    os.execve(sys.executable, [sys.executable, *sys.argv], env)
-
+# --- the impure edges ---
 
 def apply_pref_at_startup() -> None:
-    """Call before torch is imported. Re-execs once if the saved pref needs a
-    different CUDA masking than the current process has. No-op in GPU default."""
-    if os.environ.get(SENTINEL):
-        return
+    """Call before torch is imported. Applies the saved pref to this process's
+    env directly; no restart, so a bad pref can never keep the app from opening."""
     if not gpu_toggle_available():      # cpu/dml installs have nothing to mask
         return
-    pref = read_device_pref()
-    if needs_reexec(pref, os.environ.get(VISIBLE), already_applied=False):
-        _reexec(pref)   # does not return
+    apply_to_env(read_device_pref(), os.environ)
+
+
+def _restart(pref: str) -> None:
+    env = os.environ.copy()
+    apply_to_env(pref, env)
+    argv = [sys.executable, *sys.argv]
+    sys.stdout.flush()
+    if sys.platform == "win32":
+        # Windows has no real exec: os.execve spawns a new process and exits this
+        # one, so the launcher (and the terminal window) think the app quit.
+        # Run the new app as a child and pass its exit code through instead.
+        sys.exit(subprocess.run(argv, env=env).returncode)
+    os.execve(sys.executable, argv, env)
 
 
 def switch_device(new_pref: str) -> None:
-    """Persist the new pref and re-exec immediately so torch picks it up."""
+    """Persist the new pref and restart immediately so torch picks it up."""
     write_device_pref(new_pref)
-    _reexec(new_pref)   # does not return
+    _restart(new_pref)   # does not return

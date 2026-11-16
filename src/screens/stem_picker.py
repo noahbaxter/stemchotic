@@ -111,7 +111,7 @@ def _build_pane(state: dict) -> TwoPane:
     selected: set = state["selected"]
     models = state["models"]
     # Compute toggle: a CPU fallback for GPU installs. Read once (switching
-    # re-execs the process, so it can't change within this pane's lifetime).
+    # restarts the process, so it can't change within this pane's lifetime).
     dev_available = device.gpu_toggle_available()
     dev_pref = device.read_device_pref()
 
@@ -180,7 +180,7 @@ def _build_pane(state: dict) -> TwoPane:
         elif val == SET_SOURCE:
             state["kit_source"] = _cycle(KIT_SOURCES, state["kit_source"])
         elif val == SET_DEVICE:
-            # Persist pending changes first: switch_device re-execs and never returns.
+            # Persist pending changes first: switch_device restarts and never returns.
             prefs.save(state)
             device.switch_device("cpu" if dev_pref == "gpu" else "gpu")
 
