@@ -11,6 +11,9 @@ models/
 # OS
 .DS_Store
 
+# Local git worktrees
+.worktrees/
+
 # Local native build output
 /build/
 /dist/

@@ -1,39 +1,89 @@
 import json
 
+import pytest
+
 from src.core import device
 
 
-# --- pure: what CUDA_VISIBLE_DEVICES should become for a preference ---
+# --- pure: what CUDA_VISIBLE_DEVICES becomes for a preference ---
 
-def test_target_visible_cpu_masks_cuda():
-    assert device.target_visible("cpu") == ""
-
-
-def test_target_visible_gpu_leaves_cuda_alone():
-    assert device.target_visible("gpu") is None
-
-
-# --- pure: when a startup re-exec is needed (and never loops) ---
-
-def test_cpu_pref_reexecs_when_cuda_is_visible():
-    assert device.needs_reexec("cpu", None, already_applied=False) is True
-    assert device.needs_reexec("cpu", "0", already_applied=False) is True
+def test_cpu_pref_masks_cuda():
+    for start in ({}, {"CUDA_VISIBLE_DEVICES": "0"}, {"CUDA_VISIBLE_DEVICES": ""}):
+        env = dict(start)
+        device.apply_to_env("cpu", env)
+        assert env["CUDA_VISIBLE_DEVICES"] == ""
 
 
-def test_cpu_pref_no_reexec_when_already_masked():
-    assert device.needs_reexec("cpu", "", already_applied=False) is False
+def test_gpu_pref_only_undoes_a_mask():
+    env = {"CUDA_VISIBLE_DEVICES": ""}
+    device.apply_to_env("gpu", env)
+    assert "CUDA_VISIBLE_DEVICES" not in env
+
+    env = {}
+    device.apply_to_env("gpu", env)
+    assert env == {}
+
+    env = {"CUDA_VISIBLE_DEVICES": "0"}
+    device.apply_to_env("gpu", env)
+    assert env == {"CUDA_VISIBLE_DEVICES": "0"}
 
 
-def test_gpu_pref_reexecs_only_to_unmask():
-    assert device.needs_reexec("gpu", "", already_applied=False) is True
-    assert device.needs_reexec("gpu", None, already_applied=False) is False
-    assert device.needs_reexec("gpu", "0", already_applied=False) is False
+# --- startup applies in-process: a saved CPU pref must never restart the app ---
+
+def test_startup_cpu_pref_masks_without_restarting(monkeypatch, tmp_path):
+    p = tmp_path / "state.json"
+    p.write_text(json.dumps({"hardware": "gpu", "device": "cpu"}))
+    monkeypatch.setattr(device.appstate, "state_file", lambda: p)
+    monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+
+    def boom(*a, **k):
+        raise AssertionError("startup must not restart the process")
+    monkeypatch.setattr(device.os, "execve", boom)
+    monkeypatch.setattr(device.subprocess, "run", boom)
+
+    device.apply_pref_at_startup()
+    assert device.os.environ["CUDA_VISIBLE_DEVICES"] == ""
 
 
-def test_sentinel_blocks_any_further_reexec():
-    # The re-exec'd child must never bounce again, whatever the state.
-    assert device.needs_reexec("cpu", None, already_applied=True) is False
-    assert device.needs_reexec("gpu", "", already_applied=True) is False
+# --- toggling restarts: real exec on POSIX, child process on Windows ---
+
+def test_switch_on_windows_runs_child_and_exits_with_its_code(monkeypatch, tmp_path):
+    p = tmp_path / "state.json"
+    monkeypatch.setattr(device.appstate, "state_file", lambda: p)
+    monkeypatch.setattr(device.sys, "platform", "win32")
+    monkeypatch.setattr(device.os, "execve",
+                        lambda *a: (_ for _ in ()).throw(AssertionError("no execve on Windows")))
+    seen = {}
+
+    class R:
+        returncode = 3
+
+    def fake_run(argv, env):
+        seen["argv"], seen["env"] = argv, env
+        return R()
+    monkeypatch.setattr(device.subprocess, "run", fake_run)
+
+    with pytest.raises(SystemExit) as e:
+        device.switch_device("cpu")
+    assert e.value.code == 3
+    assert seen["env"]["CUDA_VISIBLE_DEVICES"] == ""
+    assert seen["argv"][0] == device.sys.executable
+    assert device.read_device_pref(p) == "cpu"
+
+
+def test_switch_on_posix_execs(monkeypatch, tmp_path):
+    monkeypatch.setattr(device.appstate, "state_file", lambda: tmp_path / "state.json")
+    monkeypatch.setattr(device.sys, "platform", "linux")
+    seen = {}
+
+    def fake_execve(exe, argv, env):
+        seen["env"] = env
+        raise SystemExit(0)
+    monkeypatch.setattr(device.os, "execve", fake_execve)
+
+    with pytest.raises(SystemExit):
+        device.switch_device("cpu")
+    assert seen["env"]["CUDA_VISIBLE_DEVICES"] == ""
 
 
 # --- pref persistence in state.json ---

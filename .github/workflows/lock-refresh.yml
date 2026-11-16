@@ -128,7 +128,13 @@ jobs:
             echo "Installed and imported the audio engine on Windows, Linux and macOS before opening this."
             echo "Check the diff for major version jumps before merging."
           } > pr-body.md
-          gh pr create --base main --head "$BRANCH" \
-            --title "refresh dependency locks for $MONTH" \
-            --body-file pr-body.md \
-            || echo "PR already open for $BRANCH; pushed to it instead."
+          if ! gh pr create --base main --head "$BRANCH" \
+              --title "refresh dependency locks for $MONTH" \
+              --body-file pr-body.md; then
+            # Fails both when a PR is already open (fine, the push updated it)
+            # and when Actions may not create PRs (repo setting), so check which.
+            gh pr view "$BRANCH" --json url -q .url || {
+              echo "::error::No PR for $BRANCH. Enable 'Allow GitHub Actions to create and approve pull requests' in repo settings."
+              exit 1
+            }
+          fi
